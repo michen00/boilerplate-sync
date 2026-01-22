@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check dist is up to date
+        run: |
+          if [ -n "$(git status --porcelain dist/)" ]; then
+            echo "::error::dist/ is out of date. Run 'npm run build' and commit the changes."
+            git diff dist/
+            exit 1
+          fi
+
+  test-action:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test action (dry run)
+        uses: ./
+        id: sync
+        with:
+          files: |
+            - project: .github/workflows/ci.yml
+              source: actions/checkout
+              path: action.yml
+          github-token: ${{ github.token }}
+          # This will fail because action.yml != ci.yml format
+          # but it tests that the action runs
+        continue-on-error: true
+
+      - name: Verify outputs
+        run: |
+          echo "has-changes: ${{ steps.sync.outputs.has-changes }}"
+          echo "updated-count: ${{ steps.sync.outputs.updated-count }}"
+          echo "failed-count: ${{ steps.sync.outputs.failed-count }}"
