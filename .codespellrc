@@ -1,0 +1,4 @@
+[codespell]
+skip = .gitignore,package-lock.json
+check-hidden = true
+builtin = clear,rare,usage

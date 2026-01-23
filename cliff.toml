@@ -1,0 +1,192 @@
+# git-cliff configuration file
+# https://git-cliff.org/docs/configuration
+
+[bump]
+breaking_always_bump_major = false
+
+[changelog]
+
+# header, body, and footer keys are Tera templates
+# https://keats.github.io/tera/docs/#introduction
+header = """
+<!-- markdownlint-configure-file { "no-duplicate-heading": false } -->\n
+# Changelog\n
+All notable changes will be documented in this file. See [conventional commits](https://www.conventionalcommits.org) for commit guidelines.\n
+The format is based on [Keep a Changelog](https://keepachangelog.com) and this project adheres to [Semantic Versioning](https://semver.org).\n
+"""
+
+body = """
+{% macro get_github_username(commit) -%}
+    {% set github_username = "" %}\
+    {% if commit.remote.username is defined and commit.remote.username %}\
+        {% set github_username = commit.remote.username %}\
+    {% elif commit.author.email is containing("@users.noreply.github.com") %}\
+        {% set email_parts = commit.author.email | split(pat="@") %}\
+        {% set username_part = email_parts[0] | split(pat="+") | last %}\
+        {% set github_username = username_part %}\
+    {% endif %}\
+    {{ github_username }}
+{%- endmacro -%}
+{% macro author_link(commit) -%}
+    {% set github_username = self::get_github_username(commit=commit) %}\
+    {% if github_username != "" %}\
+        [@{{ github_username }}](https://github.com/{{ github_username }})\
+    {% elif commit.author.name and commit.author.name != "" %}\
+        {% if commit.author.email and commit.author.email != "" %}\
+            [{{ commit.author.name }}](mailto:{{ commit.author.email }})\
+        {% else %}\
+            {{ commit.author.name }}\
+        {% endif %}\
+    {% elif commit.author.email and commit.author.email != "" %}\
+        [{{ commit.author.email }}](mailto:{{ commit.author.email }})\
+    {% endif %}
+{%- endmacro -%}
+{% if version %}\
+    {% if previous.version %}\
+        ## [{{ version | trim_start_matches(pat="v") }}]($REPO/compare/{{ previous.version }}..{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% else %}\
+        ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% endif %}\
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, group_commits in commits | filter(attribute="merge_commit", value=false) | unique(attribute="message") | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in group_commits
+    | filter(attribute="scope")
+    | sort(attribute="scope") %}
+        - **({{commit.scope}})**{% if commit.breaking %} ❗{% endif %} \
+            {{ commit.message | split(pat="\n") | first }} - ([{{ commit.id | truncate(length=7, end="") }}]($REPO/commit/{{ commit.id }})) - \
+            {{ self::author_link(commit=commit) }}
+    {%- endfor -%}
+    {% raw %}\n{% endraw %}\
+    {%- for commit in group_commits %}
+        {%- if commit.scope -%}
+        {% else -%}
+            - {% if commit.breaking %} ❗{% endif %}\
+                {{ commit.message | split(pat="\n") | first }} - ([{{ commit.id | truncate(length=7, end="") }}]($REPO/commit/{{ commit.id }})) - \
+                {{ self::author_link(commit=commit) }}
+        {% endif -%}
+    {% endfor -%}
+{% endfor %}
+{% set unique_authors = commits | map(attribute="author.name") | unique %}\
+{% if unique_authors | length > 0 %}\
+    ### 👥 Contributors\
+    {% raw %}\n{% endraw %}
+    {% for author_name in unique_authors %}\
+        {% if not author_name is containing("[bot]") %}\
+            {% set author_commits = commits | filter(attribute="author.name", value=author_name) %}\
+            {% set last_commit = author_commits | last %}\
+            {% set author_email = last_commit.author.email %}\
+            {% set github_username = self::get_github_username(commit=last_commit) %}\
+            {% if author_name and author_name != "" %}\
+                {% if github_username != "" %}\
+                    {% if author_email != "" %}\
+                - [@{{ github_username }}](https://github.com/{{ github_username }}) | [{{ author_name }}](mailto:{{ author_email }})
+                    {% else %}\
+                - [@{{ github_username }}](https://github.com/{{ github_username }}) | {{ author_name }}
+                    {% endif %}\
+                {% elif author_email != "" %}\
+                - [{{ author_name }}](mailto:{{ author_email }})
+                {% else %}\
+                - {{ author_name }}
+                {% endif %}\
+            {% elif author_email != "" %}\
+                {% if github_username != "" %}\
+                - [@{{ github_username }}](https://github.com/{{ github_username }}) | [{{ author_email }}](mailto:{{ author_email }})
+                {% else %}\
+                - [{{ author_email }}](mailto:{{ author_email }})
+                {% endif %}\
+            {% endif %}\
+        {% endif %}\
+    {% endfor %}\
+{% endif %}\
+{% raw %}\n{% endraw %}
+"""
+
+footer = """
+<!-- generated by git-cliff -->
+"""
+
+# Remove leading and trailing whitespaces from the changelog's body.
+trim = true
+
+# RegEx-based postprocessors for modifying the changelog.
+postprocessors = [
+    # Replace the placeholder with a URL.
+    { pattern = '<REPO>', replace = "https://github.com/michen00/boilerplate-sync" },
+    { pattern = '\$REPO', replace = "https://github.com/michen00/boilerplate-sync" },
+    # Link commit hashes in scopes **(hash)** - preserve parentheses
+    { pattern = '\*\*\(([a-f0-9]{7,})\)\*\*', replace = "**([`${1}`](https://github.com/michen00/boilerplate-sync/commit/${1}))**" },
+    # Replace work email with personal email
+    { pattern = 'michael\.chen@aicadium\.ai', replace = "michael.chen.0@gmail.com" },
+]
+
+# render body even when there are no releases to process
+# render_always = true
+# output file path
+# output = "test.md"
+
+[git]
+
+# Parse commits according to the conventional commits specification.
+# See https://www.conventionalcommits.org
+conventional_commits = true
+
+# Exclude commits that do not match the conventional commits specification.
+filter_unconventional = false
+
+# Require all commits to be conventional.
+# Takes precedence over filter_unconventional.
+require_conventional = false
+
+# Split commits on newlines, treating each line as an individual commit.
+split_commits = false
+
+# RegEx-based parsers for modifying commit messages prior to further processing.
+commit_preprocessors = [
+    # Link issue/PR numbers (#123) - GitHub uses same URL space for both
+    { pattern = '#([0-9]+)', replace = "[#${1}](<REPO>/issues/${1})" },
+]
+
+commit_parsers = [
+    # Existing skips (unchanged)
+    { message = "^\\d+\\.\\d+\\.\\d+$", skip = true },
+    { message = "^chore\\(release\\): prepare for", skip = true },
+    { message = "^chore\\(deps.*\\)", skip = true },
+    { message = "^chore\\(pr\\)", skip = true },
+    { message = "^chore\\(pull\\)", skip = true },
+    { message = "^chore: merge", skip = true },
+    { message = "^docs\\(blame\\)", skip = true },
+    { message = "^docs: update .git-blame-ignore-revs", skip = true },
+
+    # User-facing categories (KEEP)
+    { message = "^feat", group = "<!-- 00 -->✨ Features" },
+    { message = "^fix", group = "<!-- 01 -->🐛 Fixes" },
+    { message = "^perf", group = "<!-- 02 -->⚡ Performance" },
+    { message = "^revert", group = "<!-- 03 -->⏪️ Revert" },
+
+    # Internal categories (SKIP); breaking changes are allowed
+    { message = "^doc", group = "<!-- 04 -->📝 Documentation", skip = true },
+    { message = "^build", group = "<!-- 05 -->👷 Build", skip = true },
+    { message = "^ci", group = "<!-- 06 -->💚 Continuous Integration", skip = true },
+    { message = "^test", group = "<!-- 07 -->🧪 Tests", skip = true },
+    { message = "^refactor", group = "<!-- 08 -->♻️ Refactor", skip = true },
+    { message = "^style", group = "<!-- 09 -->🎨 Styling", skip = true },
+    { message = "^chore", group = "<!-- 10 -->⚙️ Miscellaneous Tasks", skip = true },
+
+    # Catch-all for non-conventional commits
+    { message = "^.*", group = "<!-- 11 -->🔍 Other", skip = false },
+]
+
+protect_breaking_commits = true
+
+# Exclude commits that are not matched by any commit parser.
+filter_commits = false
+
+# Order releases topologically instead of chronologically.
+topo_order = true
+
+# Order of commits in each group/release within the changelog.
+# Allowed values: newest, oldest
+sort_commits = "newest"
