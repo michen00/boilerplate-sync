@@ -1,4 +1,4 @@
 [codespell]
-skip = .gitignore,package-lock.json
+skip = .gitignore,CHANGELOG.md,package-lock.json
 check-hidden = true
 builtin = clear,rare,usage
