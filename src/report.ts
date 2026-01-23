@@ -12,7 +12,7 @@ function escapeMarkdown(text: string): string {
  * Format a single result row for the table
  */
 function formatResultRow(result: SyncResult): string {
-  const file = `\`${escapeMarkdown(result.config.project)}\``;
+  const file = `\`${escapeMarkdown(result.config.local_path)}\``;
   const source = `\`${escapeMarkdown(result.config.source)}\``;
   const ref = result.resolvedRef ?? result.config.ref ?? '_default_';
   
@@ -23,7 +23,7 @@ function formatResultRow(result: SyncResult): string {
  * Format a failed result row
  */
 function formatFailedRow(result: SyncResult): string {
-  const file = `\`${escapeMarkdown(result.config.project)}\``;
+  const file = `\`${escapeMarkdown(result.config.local_path)}\``;
   const error = escapeMarkdown(result.error ?? 'Unknown error');
   
   return `| ${file} | ${error} |`;
@@ -33,7 +33,7 @@ function formatFailedRow(result: SyncResult): string {
  * Format a skipped result row
  */
 function formatSkippedRow(result: SyncResult): string {
-  const file = `\`${escapeMarkdown(result.config.project)}\``;
+  const file = `\`${escapeMarkdown(result.config.local_path)}\``;
   const reason = result.error ?? 'No changes detected';
   
   return `| ${file} | ${escapeMarkdown(reason)} |`;

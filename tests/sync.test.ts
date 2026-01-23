@@ -28,12 +28,16 @@ vi.mock('../src/sources/github', () => ({
 
 describe('syncFiles', () => {
   const mockInputs: ActionInputs = {
-    files: [
+    sources: [
       {
-        project: 'test.ts',
         source: 'owner/repo',
-        path: 'src/test.ts',
         ref: 'main',
+        files: [
+          {
+            local_path: 'test.ts',
+            source_path: 'src/test.ts',
+          },
+        ],
       },
     ],
     githubToken: 'gh-token',
@@ -102,21 +106,23 @@ describe('syncFiles', () => {
   it('handles multiple files with mixed results', async () => {
     const inputs: ActionInputs = {
       ...mockInputs,
-      files: [
+      sources: [
         {
-          project: 'updated.ts',
           source: 'owner/repo',
-          path: 'src/updated.ts',
-        },
-        {
-          project: 'created.ts',
-          source: 'owner/repo',
-          path: 'src/created.ts',
-        },
-        {
-          project: 'skipped.ts',
-          source: 'owner/repo',
-          path: 'src/skipped.ts',
+          files: [
+            {
+              local_path: 'updated.ts',
+              source_path: 'src/updated.ts',
+            },
+            {
+              local_path: 'created.ts',
+              source_path: 'src/created.ts',
+            },
+            {
+              local_path: 'skipped.ts',
+              source_path: 'src/skipped.ts',
+            },
+          ],
         },
       ],
     };
@@ -163,16 +169,19 @@ describe('syncFiles', () => {
     const inputs: ActionInputs = {
       ...mockInputs,
       failOnError: true,
-      files: [
+      sources: [
         {
-          project: 'failing.ts',
           source: 'owner/repo',
-          path: 'src/failing.ts',
-        },
-        {
-          project: 'should-not-process.ts',
-          source: 'owner/repo',
-          path: 'src/should-not-process.ts',
+          files: [
+            {
+              local_path: 'failing.ts',
+              source_path: 'src/failing.ts',
+            },
+            {
+              local_path: 'should-not-process.ts',
+              source_path: 'src/should-not-process.ts',
+            },
+          ],
         },
       ],
     };

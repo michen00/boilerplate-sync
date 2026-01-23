@@ -154,7 +154,7 @@ export class GitHubSource implements FileSource {
 }
 
 /**
- * Create a GitHubSource from a FileSyncConfig
+ * Create a GitHubSource from source repository, path, and optional ref
  */
 export function createGitHubSource(
   source: string,

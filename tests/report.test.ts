@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { generatePrBody, generateCommitMessage, generateStepSummary } from '../src/report';
-import type { SyncSummary, SyncResult, FileSyncConfig } from '../src/sources/types';
+import type { SyncSummary, SyncResult, NormalizedFileSyncConfig } from '../src/sources/types';
 
-function createConfig(overrides: Partial<FileSyncConfig> = {}): FileSyncConfig {
+function createConfig(overrides: Partial<NormalizedFileSyncConfig> = {}): NormalizedFileSyncConfig {
   return {
-    project: '.eslintrc.js',
+    local_path: '.eslintrc.js',
+    source_path: '.eslintrc.js',
     source: 'my-org/boilerplate',
-    path: '.eslintrc.js',
     ...overrides,
   };
 }
@@ -41,7 +41,7 @@ describe('generatePrBody', () => {
     const summary = createSummary({
       updated: [
         createResult('updated', {
-          config: { project: '.eslintrc.js', source: 'org/repo', path: '.eslintrc.js' },
+          config: { local_path: '.eslintrc.js', source_path: '.eslintrc.js', source: 'org/repo' },
           resolvedRef: 'main',
         }),
       ],
@@ -62,7 +62,7 @@ describe('generatePrBody', () => {
     const summary = createSummary({
       created: [
         createResult('created', {
-          config: { project: 'new-file.js', source: 'org/repo', path: 'new-file.js' },
+          config: { local_path: 'new-file.js', source_path: 'new-file.js', source: 'org/repo' },
         }),
       ],
       total: 1,
@@ -79,7 +79,7 @@ describe('generatePrBody', () => {
     const summary = createSummary({
       skipped: [
         createResult('skipped', {
-          config: { project: 'unchanged.js', source: 'org/repo', path: 'unchanged.js' },
+          config: { local_path: 'unchanged.js', source_path: 'unchanged.js', source: 'org/repo' },
         }),
       ],
       total: 1,
@@ -95,7 +95,7 @@ describe('generatePrBody', () => {
     const summary = createSummary({
       failed: [
         createResult('failed', {
-          config: { project: 'missing.js', source: 'org/repo', path: 'missing.js' },
+          config: { local_path: 'missing.js', source_path: 'missing.js', source: 'org/repo' },
           error: 'File not found',
         }),
       ],
@@ -143,7 +143,7 @@ describe('generatePrBody', () => {
     const summary = createSummary({
       failed: [
         createResult('failed', {
-          config: { project: 'file|name.js', source: 'org/repo', path: 'file.js' },
+          config: { local_path: 'file|name.js', source_path: 'file.js', source: 'org/repo' },
           error: 'Error with | pipe',
         }),
       ],

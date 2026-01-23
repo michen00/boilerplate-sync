@@ -6,9 +6,9 @@ describe('PR Logic', () => {
   describe('shouldCreatePr', () => {
     const mockResult: SyncResult = {
       config: {
-        project: 'test.ts',
+        local_path: 'test.ts',
+        source_path: 'src/test.ts',
         source: 'owner/repo',
-        path: 'src/test.ts',
       },
       status: 'updated',
       resolvedRef: 'main',
@@ -31,9 +31,9 @@ describe('PR Logic', () => {
     it('returns true when all files failed', () => {
       const failedResult: SyncResult = {
         config: {
-          project: 'test.ts',
+          local_path: 'test.ts',
+          source_path: 'src/test.ts',
           source: 'owner/repo',
-          path: 'src/test.ts',
         },
         status: 'failed',
         error: 'Network error',
@@ -55,9 +55,9 @@ describe('PR Logic', () => {
     it('returns false when no changes and no failures', () => {
       const skippedResult: SyncResult = {
         config: {
-          project: 'test.ts',
+          local_path: 'test.ts',
+          source_path: 'src/test.ts',
           source: 'owner/repo',
-          path: 'src/test.ts',
         },
         status: 'skipped',
         resolvedRef: 'main',
@@ -79,9 +79,9 @@ describe('PR Logic', () => {
     it('returns true when files were created', () => {
       const createdResult: SyncResult = {
         config: {
-          project: 'new.ts',
+          local_path: 'new.ts',
+          source_path: 'src/new.ts',
           source: 'owner/repo',
-          path: 'src/new.ts',
         },
         status: 'created',
         resolvedRef: 'main',
@@ -109,9 +109,9 @@ describe('PR Logic', () => {
         failed: [
           {
             config: {
-              project: 'failed.ts',
+              local_path: 'failed.ts',
+              source_path: 'src/failed.ts',
               source: 'owner/repo',
-              path: 'src/failed.ts',
             },
             status: 'failed',
             error: 'Not found',

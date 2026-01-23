@@ -1,6 +1,11 @@
 import * as core from '@actions/core';
 import { parse as parseYaml } from 'yaml';
-import type { ActionInputs, FileSyncConfig } from './sources/types';
+import type {
+  ActionInputs,
+  SourceConfig,
+  FileMapping,
+  NormalizedFileSyncConfig,
+} from './sources/types';
 
 /**
  * Validation error for configuration
@@ -13,31 +18,61 @@ export class ConfigError extends Error {
 }
 
 /**
- * Validate a single file sync config entry
+ * Validate a single file mapping entry
  */
-function validateFileSyncConfig(
+function validateFileMapping(
   entry: unknown,
-  index: number
-): FileSyncConfig {
+  sourceIndex: number,
+  fileIndex: number
+): FileMapping {
   if (typeof entry !== 'object' || entry === null) {
     throw new ConfigError(
-      `Entry ${index + 1}: Expected an object, got ${typeof entry}`
+      `Source ${sourceIndex + 1}, file ${fileIndex + 1}: Expected an object, got ${typeof entry}`
     );
   }
 
   const obj = entry as Record<string, unknown>;
 
-  // Validate required 'project' field
-  if (typeof obj.project !== 'string' || !obj.project.trim()) {
+  // Validate required 'local_path' field
+  if (typeof obj.local_path !== 'string' || !obj.local_path.trim()) {
     throw new ConfigError(
-      `Entry ${index + 1}: 'project' is required and must be a non-empty string`
+      `Source ${sourceIndex + 1}, file ${fileIndex + 1}: 'local_path' is required and must be a non-empty string`
     );
   }
+
+  // Validate optional 'source_path' field
+  if (obj.source_path !== undefined && typeof obj.source_path !== 'string') {
+    throw new ConfigError(
+      `Source ${sourceIndex + 1}, file ${fileIndex + 1}: 'source_path' must be a string if provided`
+    );
+  }
+
+  return {
+    local_path: obj.local_path.trim(),
+    source_path:
+      typeof obj.source_path === 'string' ? obj.source_path.trim() : undefined,
+  };
+}
+
+/**
+ * Validate a single source config entry
+ */
+function validateSourceConfig(
+  entry: unknown,
+  index: number
+): SourceConfig {
+  if (typeof entry !== 'object' || entry === null) {
+    throw new ConfigError(
+      `Source ${index + 1}: Expected an object, got ${typeof entry}`
+    );
+  }
+
+  const obj = entry as Record<string, unknown>;
 
   // Validate required 'source' field
   if (typeof obj.source !== 'string' || !obj.source.trim()) {
     throw new ConfigError(
-      `Entry ${index + 1}: 'source' is required and must be a non-empty string`
+      `Source ${index + 1}: 'source' is required and must be a non-empty string`
     );
   }
 
@@ -45,59 +80,92 @@ function validateFileSyncConfig(
   const sourceParts = obj.source.split('/');
   if (sourceParts.length !== 2 || !sourceParts[0] || !sourceParts[1]) {
     throw new ConfigError(
-      `Entry ${index + 1}: 'source' must be in 'owner/repo' format, got '${obj.source}'`
-    );
-  }
-
-  // Validate required 'path' field
-  if (typeof obj.path !== 'string' || !obj.path.trim()) {
-    throw new ConfigError(
-      `Entry ${index + 1}: 'path' is required and must be a non-empty string`
+      `Source ${index + 1}: 'source' must be in 'owner/repo' format, got '${obj.source}'`
     );
   }
 
   // Validate optional 'ref' field
   if (obj.ref !== undefined && typeof obj.ref !== 'string') {
     throw new ConfigError(
-      `Entry ${index + 1}: 'ref' must be a string if provided`
+      `Source ${index + 1}: 'ref' must be a string if provided`
     );
   }
 
+  // Validate required 'files' array
+  if (!Array.isArray(obj.files)) {
+    throw new ConfigError(
+      `Source ${index + 1}: 'files' is required and must be an array`
+    );
+  }
+
+  if (obj.files.length === 0) {
+    throw new ConfigError(
+      `Source ${index + 1}: 'files' array cannot be empty`
+    );
+  }
+
+  // Validate each file mapping
+  const files = obj.files.map((file, fileIndex) =>
+    validateFileMapping(file, index, fileIndex)
+  );
+
   return {
-    project: obj.project.trim(),
     source: obj.source.trim(),
-    path: obj.path.trim(),
     ref: typeof obj.ref === 'string' ? obj.ref.trim() : undefined,
+    files,
   };
 }
 
 /**
- * Parse the 'files' input YAML into validated configs
+ * Parse the 'sources' input YAML into validated configs
  */
-export function parseFilesInput(filesYaml: string): FileSyncConfig[] {
-  if (!filesYaml.trim()) {
-    throw new ConfigError("'files' input is required and cannot be empty");
+export function parseSourcesInput(sourcesYaml: string): SourceConfig[] {
+  if (!sourcesYaml.trim()) {
+    throw new ConfigError("'sources' input is required and cannot be empty");
   }
 
   let parsed: unknown;
   try {
-    parsed = parseYaml(filesYaml);
+    parsed = parseYaml(sourcesYaml);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new ConfigError(`Failed to parse 'files' YAML: ${message}`);
+    throw new ConfigError(`Failed to parse 'sources' YAML: ${message}`);
   }
 
   if (!Array.isArray(parsed)) {
     throw new ConfigError(
-      `'files' must be a YAML array, got ${typeof parsed}`
+      `'sources' must be a YAML array, got ${typeof parsed}`
     );
   }
 
   if (parsed.length === 0) {
-    throw new ConfigError("'files' array cannot be empty");
+    throw new ConfigError("'sources' array cannot be empty");
   }
 
-  return parsed.map((entry, index) => validateFileSyncConfig(entry, index));
+  return parsed.map((entry, index) => validateSourceConfig(entry, index));
+}
+
+/**
+ * Normalize sources configuration into flat file sync configs
+ * This flattens the nested structure for use by sync logic
+ */
+export function normalizeSources(
+  sources: SourceConfig[]
+): NormalizedFileSyncConfig[] {
+  const normalized: NormalizedFileSyncConfig[] = [];
+
+  for (const source of sources) {
+    for (const file of source.files) {
+      normalized.push({
+        local_path: file.local_path,
+        source_path: file.source_path ?? file.local_path,
+        source: source.source,
+        ref: source.ref,
+      });
+    }
+  }
+
+  return normalized;
 }
 
 /**
@@ -117,8 +185,8 @@ function parseLabels(labelsInput: string): string[] {
  * Get and validate all action inputs
  */
 export function getInputs(): ActionInputs {
-  const filesYaml = core.getInput('files', { required: true });
-  const files = parseFilesInput(filesYaml);
+  const sourcesYaml = core.getInput('sources', { required: true });
+  const sources = parseSourcesInput(sourcesYaml);
 
   const githubToken = core.getInput('github-token', { required: true });
   if (!githubToken) {
@@ -138,7 +206,7 @@ export function getInputs(): ActionInputs {
   const schedule = core.getInput('schedule') || undefined;
 
   return {
-    files,
+    sources,
     githubToken,
     sourceToken,
     createMissing,
@@ -155,16 +223,26 @@ export function getInputs(): ActionInputs {
  * Log the parsed configuration (for debugging)
  */
 export function logConfig(inputs: ActionInputs): void {
+  const totalFiles = inputs.sources.reduce(
+    (sum, source) => sum + source.files.length,
+    0
+  );
+
   core.info(`Configuration:`);
-  core.info(`  Files to sync: ${inputs.files.length}`);
+  core.info(`  Sources: ${inputs.sources.length}`);
+  core.info(`  Files to sync: ${totalFiles}`);
   core.info(`  Create missing: ${inputs.createMissing}`);
   core.info(`  Fail on error: ${inputs.failOnError}`);
   core.info(`  PR branch: ${inputs.prBranch}`);
   core.info(`  PR labels: ${inputs.prLabels.join(', ') || '(none)'}`);
   
-  core.startGroup('Files configuration');
-  for (const file of inputs.files) {
-    core.info(`  ${file.project} <- ${file.source}:${file.path}@${file.ref ?? '(default)'}`);
+  core.startGroup('Sources configuration');
+  for (const source of inputs.sources) {
+    core.info(`  ${source.source}@${source.ref ?? '(default)'}:`);
+    for (const file of source.files) {
+      const sourcePath = file.source_path ?? file.local_path;
+      core.info(`    ${file.local_path} <- ${sourcePath}`);
+    }
   }
   core.endGroup();
 }

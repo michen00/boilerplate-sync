@@ -2,8 +2,9 @@ import * as core from '@actions/core';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createGitHubSource } from './sources/github';
+import { normalizeSources } from './config';
 import type {
-  FileSyncConfig,
+  NormalizedFileSyncConfig,
   SyncResult,
   SyncSummary,
   ActionInputs,
@@ -48,17 +49,17 @@ async function writeFile(filePath: string, content: string): Promise<void> {
  * Sync a single file from source to project
  */
 async function syncFile(
-  config: FileSyncConfig,
+  config: NormalizedFileSyncConfig,
   sourceToken: string,
   createMissing: boolean
 ): Promise<SyncResult> {
-  const { project, source, path: sourcePath, ref } = config;
+  const { local_path, source_path, source, ref } = config;
 
-  core.info(`Syncing: ${project}`);
+  core.info(`Syncing: ${local_path}`);
 
   try {
     // Check if project file exists
-    const exists = await fileExists(project);
+    const exists = await fileExists(local_path);
     
     if (!exists && !createMissing) {
       core.info(`  Skipped: file does not exist and create-missing is false`);
@@ -70,14 +71,14 @@ async function syncFile(
     }
 
     // Fetch from source
-    const gitSource = createGitHubSource(source, sourcePath, ref);
+    const gitSource = createGitHubSource(source, source_path, ref);
     core.info(`  Fetching from ${gitSource.toString()}`);
     
     const fetchResult = await gitSource.fetch(sourceToken);
     const newContent = fetchResult.content;
 
     // Compare with existing content
-    const existingContent = exists ? await readFile(project) : null;
+    const existingContent = exists ? await readFile(local_path) : null;
 
     if (existingContent !== null && existingContent === newContent) {
       core.info(`  Skipped: no changes`);
@@ -89,12 +90,12 @@ async function syncFile(
     }
 
     // Write the new content
-    await writeFile(project, newContent);
+    await writeFile(local_path, newContent);
 
     const isNew = existingContent === null;
     const status = isNew ? 'created' : 'updated';
     
-    core.info(`  ${isNew ? 'Created' : 'Updated'}: ${project}`);
+    core.info(`  ${isNew ? 'Created' : 'Updated'}: ${local_path}`);
 
     return {
       config,
@@ -118,11 +119,14 @@ async function syncFile(
  * Sync all files and return summary
  */
 export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
-  const { files, sourceToken, createMissing, failOnError } = inputs;
+  const { sources, sourceToken, createMissing, failOnError } = inputs;
+
+  // Normalize sources into flat file configs
+  const normalizedConfigs = normalizeSources(sources);
 
   const results: SyncResult[] = [];
 
-  for (const config of files) {
+  for (const config of normalizedConfigs) {
     const result = await syncFile(config, sourceToken, createMissing);
     results.push(result);
 

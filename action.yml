@@ -7,19 +7,22 @@ branding:
   color: 'blue'
 
 inputs:
-  files:
+  sources:
     description: |
-      YAML array of file sync mappings. Each entry requires:
-        - project: path in this repo to update
+      YAML array of source repositories. Each source contains:
         - source: GitHub repo in 'owner/repo' format
-        - path: path to file in source repo
-        - ref: (optional) git ref (branch, tag, commit SHA)
+        - ref: (optional) git ref (branch, tag, commit SHA) - applies to all files from this source
+        - files: array of file mappings, each with:
+          - local_path: path in this repo to update
+          - source_path: (optional) path to file in source repo, defaults to local_path
       Example:
-        files: |
-          - project: .github/workflows/ci.yml
-            source: org/boilerplate
-            path: workflows/ci.yml
+        sources: |
+          - source: org/boilerplate
             ref: main
+            files:
+              - local_path: .github/workflows/ci.yml
+                source_path: workflows/ci.yml
+              - local_path: .eslintrc.js
     required: true
 
   github-token:

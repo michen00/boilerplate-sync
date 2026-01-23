@@ -1,5 +1,43 @@
 /**
- * Configuration for a single file sync operation
+ * File mapping within a source configuration
+ */
+export interface FileMapping {
+  /** Path in the target (current) repository */
+  local_path: string;
+  /** Path to the file in the source repository (optional, defaults to local_path) */
+  source_path?: string;
+}
+
+/**
+ * Configuration for a source repository
+ */
+export interface SourceConfig {
+  /** Source repository in 'owner/repo' format */
+  source: string;
+  /** Git ref (branch, tag, SHA) - optional, uses default branch if not specified */
+  ref?: string;
+  /** Files to sync from this source */
+  files: FileMapping[];
+}
+
+/**
+ * Normalized file sync configuration (internal use)
+ * This is the flattened format used by sync logic
+ */
+export interface NormalizedFileSyncConfig {
+  /** Path in the target (current) repository */
+  local_path: string;
+  /** Path to the file in the source repository */
+  source_path: string;
+  /** Source repository in 'owner/repo' format */
+  source: string;
+  /** Git ref (branch, tag, SHA) - optional, uses default branch if not specified */
+  ref?: string;
+}
+
+/**
+ * @deprecated Use NormalizedFileSyncConfig instead
+ * Kept for backward compatibility in SyncResult
  */
 export interface FileSyncConfig {
   /** Path in the target (current) repository */
@@ -56,7 +94,7 @@ export type SyncStatus = 'updated' | 'created' | 'skipped' | 'failed';
  */
 export interface SyncResult {
   /** The original config for this file */
-  config: FileSyncConfig;
+  config: NormalizedFileSyncConfig;
   /** Status of the operation */
   status: SyncStatus;
   /** Error message if status is 'failed' */
@@ -91,7 +129,7 @@ export interface SyncSummary {
  * Parsed action inputs
  */
 export interface ActionInputs {
-  files: FileSyncConfig[];
+  sources: SourceConfig[];
   githubToken: string;
   sourceToken: string;
   createMissing: boolean;
