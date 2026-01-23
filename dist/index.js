@@ -32737,7 +32737,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ConfigError = void 0;
-exports.parseFilesInput = parseFilesInput;
+exports.parseSourcesInput = parseSourcesInput;
+exports.normalizeSources = normalizeSources;
 exports.getInputs = getInputs;
 exports.logConfig = logConfig;
 const core = __importStar(__nccwpck_require__(7484));
@@ -32753,63 +32754,102 @@ class ConfigError extends Error {
 }
 exports.ConfigError = ConfigError;
 /**
- * Validate a single file sync config entry
+ * Validate a single file mapping entry
  */
-function validateFileSyncConfig(entry, index) {
+function validateFileMapping(entry, sourceIndex, fileIndex) {
     if (typeof entry !== 'object' || entry === null) {
-        throw new ConfigError(`Entry ${index + 1}: Expected an object, got ${typeof entry}`);
+        throw new ConfigError(`Source ${sourceIndex + 1}, file ${fileIndex + 1}: Expected an object, got ${typeof entry}`);
     }
     const obj = entry;
-    // Validate required 'project' field
-    if (typeof obj.project !== 'string' || !obj.project.trim()) {
-        throw new ConfigError(`Entry ${index + 1}: 'project' is required and must be a non-empty string`);
+    // Validate required 'local_path' field
+    if (typeof obj.local_path !== 'string' || !obj.local_path.trim()) {
+        throw new ConfigError(`Source ${sourceIndex + 1}, file ${fileIndex + 1}: 'local_path' is required and must be a non-empty string`);
     }
+    // Validate optional 'source_path' field
+    if (obj.source_path !== undefined && typeof obj.source_path !== 'string') {
+        throw new ConfigError(`Source ${sourceIndex + 1}, file ${fileIndex + 1}: 'source_path' must be a string if provided`);
+    }
+    return {
+        local_path: obj.local_path.trim(),
+        source_path: typeof obj.source_path === 'string' ? obj.source_path.trim() : undefined,
+    };
+}
+/**
+ * Validate a single source config entry
+ */
+function validateSourceConfig(entry, index) {
+    if (typeof entry !== 'object' || entry === null) {
+        throw new ConfigError(`Source ${index + 1}: Expected an object, got ${typeof entry}`);
+    }
+    const obj = entry;
     // Validate required 'source' field
     if (typeof obj.source !== 'string' || !obj.source.trim()) {
-        throw new ConfigError(`Entry ${index + 1}: 'source' is required and must be a non-empty string`);
+        throw new ConfigError(`Source ${index + 1}: 'source' is required and must be a non-empty string`);
     }
     // Validate source format (owner/repo)
     const sourceParts = obj.source.split('/');
     if (sourceParts.length !== 2 || !sourceParts[0] || !sourceParts[1]) {
-        throw new ConfigError(`Entry ${index + 1}: 'source' must be in 'owner/repo' format, got '${obj.source}'`);
-    }
-    // Validate required 'path' field
-    if (typeof obj.path !== 'string' || !obj.path.trim()) {
-        throw new ConfigError(`Entry ${index + 1}: 'path' is required and must be a non-empty string`);
+        throw new ConfigError(`Source ${index + 1}: 'source' must be in 'owner/repo' format, got '${obj.source}'`);
     }
     // Validate optional 'ref' field
     if (obj.ref !== undefined && typeof obj.ref !== 'string') {
-        throw new ConfigError(`Entry ${index + 1}: 'ref' must be a string if provided`);
+        throw new ConfigError(`Source ${index + 1}: 'ref' must be a string if provided`);
     }
+    // Validate required 'files' array
+    if (!Array.isArray(obj.files)) {
+        throw new ConfigError(`Source ${index + 1}: 'files' is required and must be an array`);
+    }
+    if (obj.files.length === 0) {
+        throw new ConfigError(`Source ${index + 1}: 'files' array cannot be empty`);
+    }
+    // Validate each file mapping
+    const files = obj.files.map((file, fileIndex) => validateFileMapping(file, index, fileIndex));
     return {
-        project: obj.project.trim(),
         source: obj.source.trim(),
-        path: obj.path.trim(),
         ref: typeof obj.ref === 'string' ? obj.ref.trim() : undefined,
+        files,
     };
 }
 /**
- * Parse the 'files' input YAML into validated configs
+ * Parse the 'sources' input YAML into validated configs
  */
-function parseFilesInput(filesYaml) {
-    if (!filesYaml.trim()) {
-        throw new ConfigError("'files' input is required and cannot be empty");
+function parseSourcesInput(sourcesYaml) {
+    if (!sourcesYaml.trim()) {
+        throw new ConfigError("'sources' input is required and cannot be empty");
     }
     let parsed;
     try {
-        parsed = (0, yaml_1.parse)(filesYaml);
+        parsed = (0, yaml_1.parse)(sourcesYaml);
     }
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new ConfigError(`Failed to parse 'files' YAML: ${message}`);
+        throw new ConfigError(`Failed to parse 'sources' YAML: ${message}`);
     }
     if (!Array.isArray(parsed)) {
-        throw new ConfigError(`'files' must be a YAML array, got ${typeof parsed}`);
+        throw new ConfigError(`'sources' must be a YAML array, got ${typeof parsed}`);
     }
     if (parsed.length === 0) {
-        throw new ConfigError("'files' array cannot be empty");
+        throw new ConfigError("'sources' array cannot be empty");
     }
-    return parsed.map((entry, index) => validateFileSyncConfig(entry, index));
+    return parsed.map((entry, index) => validateSourceConfig(entry, index));
+}
+/**
+ * Normalize sources configuration into flat file sync configs
+ * This flattens the nested structure for use by sync logic
+ */
+function normalizeSources(sources) {
+    const normalized = [];
+    for (const source of sources) {
+        for (const file of source.files) {
+            normalized.push({
+                local_path: file.local_path,
+                source_path: file.source_path ?? file.local_path,
+                source: source.source,
+                ref: source.ref,
+            });
+        }
+    }
+    return normalized;
 }
 /**
  * Parse comma-separated labels into array
@@ -32827,8 +32867,8 @@ function parseLabels(labelsInput) {
  * Get and validate all action inputs
  */
 function getInputs() {
-    const filesYaml = core.getInput('files', { required: true });
-    const files = parseFilesInput(filesYaml);
+    const sourcesYaml = core.getInput('sources', { required: true });
+    const sources = parseSourcesInput(sourcesYaml);
     const githubToken = core.getInput('github-token', { required: true });
     if (!githubToken) {
         throw new ConfigError('github-token is required');
@@ -32841,9 +32881,8 @@ function getInputs() {
     const prLabels = parseLabels(core.getInput('pr-labels'));
     const prBranch = core.getInput('pr-branch') || 'boilerplate-sync';
     const commitMessage = core.getInput('commit-message') || 'chore: sync boilerplate files';
-    const schedule = core.getInput('schedule') || undefined;
     return {
-        files,
+        sources,
         githubToken,
         sourceToken,
         createMissing,
@@ -32852,22 +32891,27 @@ function getInputs() {
         prLabels,
         prBranch,
         commitMessage,
-        schedule,
     };
 }
 /**
  * Log the parsed configuration (for debugging)
  */
 function logConfig(inputs) {
+    const totalFiles = inputs.sources.reduce((sum, source) => sum + source.files.length, 0);
     core.info(`Configuration:`);
-    core.info(`  Files to sync: ${inputs.files.length}`);
+    core.info(`  Sources: ${inputs.sources.length}`);
+    core.info(`  Files to sync: ${totalFiles}`);
     core.info(`  Create missing: ${inputs.createMissing}`);
     core.info(`  Fail on error: ${inputs.failOnError}`);
     core.info(`  PR branch: ${inputs.prBranch}`);
     core.info(`  PR labels: ${inputs.prLabels.join(', ') || '(none)'}`);
-    core.startGroup('Files configuration');
-    for (const file of inputs.files) {
-        core.info(`  ${file.project} <- ${file.source}:${file.path}@${file.ref ?? '(default)'}`);
+    core.startGroup('Sources configuration');
+    for (const source of inputs.sources) {
+        core.info(`  ${source.source}@${source.ref ?? '(default)'}:`);
+        for (const file of source.files) {
+            const sourcePath = file.source_path ?? file.local_path;
+            core.info(`    ${file.local_path} <- ${sourcePath}`);
+        }
     }
     core.endGroup();
 }
@@ -33197,7 +33241,7 @@ async function createOrUpdatePr(inputs, summary) {
     // Determine if this should be a draft PR
     const isDraft = summary.allFailed;
     // Generate PR body and commit message
-    const prBody = (0, report_1.generatePrBody)(summary, inputs.schedule);
+    const prBody = (0, report_1.generatePrBody)(summary);
     const finalCommitMessage = (0, report_1.generateCommitMessage)(summary, commitMessage);
     const octokit = github.getOctokit(githubToken);
     // Get default branch for PR base
@@ -33261,7 +33305,7 @@ function escapeMarkdown(text) {
  * Format a single result row for the table
  */
 function formatResultRow(result) {
-    const file = `\`${escapeMarkdown(result.config.project)}\``;
+    const file = `\`${escapeMarkdown(result.config.local_path)}\``;
     const source = `\`${escapeMarkdown(result.config.source)}\``;
     const ref = result.resolvedRef ?? result.config.ref ?? '_default_';
     return `| ${file} | ${source} | ${escapeMarkdown(ref)} |`;
@@ -33270,7 +33314,7 @@ function formatResultRow(result) {
  * Format a failed result row
  */
 function formatFailedRow(result) {
-    const file = `\`${escapeMarkdown(result.config.project)}\``;
+    const file = `\`${escapeMarkdown(result.config.local_path)}\``;
     const error = escapeMarkdown(result.error ?? 'Unknown error');
     return `| ${file} | ${error} |`;
 }
@@ -33278,24 +33322,19 @@ function formatFailedRow(result) {
  * Format a skipped result row
  */
 function formatSkippedRow(result) {
-    const file = `\`${escapeMarkdown(result.config.project)}\``;
+    const file = `\`${escapeMarkdown(result.config.local_path)}\``;
     const reason = result.error ?? 'No changes detected';
     return `| ${file} | ${escapeMarkdown(reason)} |`;
 }
 /**
  * Generate the PR body markdown
  */
-function generatePrBody(summary, schedule) {
+function generatePrBody(summary) {
     const lines = [];
     lines.push('## 🔄 Boilerplate Sync');
     lines.push('');
     lines.push('This PR updates project files from their boilerplate sources.');
     lines.push('');
-    // Add schedule information if provided
-    if (schedule) {
-        lines.push(`**Schedule:** \`${schedule}\``);
-        lines.push('');
-    }
     // Updated files section
     if (summary.updated.length > 0) {
         lines.push(`### ✅ Updated (${summary.updated.length} file${summary.updated.length === 1 ? '' : 's'})`);
@@ -33537,7 +33576,7 @@ class GitHubSource {
 }
 exports.GitHubSource = GitHubSource;
 /**
- * Create a GitHubSource from a FileSyncConfig
+ * Create a GitHubSource from source repository, path, and optional ref
  */
 function createGitHubSource(source, path, ref) {
     return new GitHubSource(source, path, ref);
@@ -33596,6 +33635,7 @@ const core = __importStar(__nccwpck_require__(7484));
 const fs = __importStar(__nccwpck_require__(1943));
 const path = __importStar(__nccwpck_require__(6928));
 const github_1 = __nccwpck_require__(15);
+const config_1 = __nccwpck_require__(2973);
 /**
  * Check if a file exists
  */
@@ -33634,11 +33674,11 @@ async function writeFile(filePath, content) {
  * Sync a single file from source to project
  */
 async function syncFile(config, sourceToken, createMissing) {
-    const { project, source, path: sourcePath, ref } = config;
-    core.info(`Syncing: ${project}`);
+    const { local_path, source_path, source, ref } = config;
+    core.info(`Syncing: ${local_path}`);
     try {
         // Check if project file exists
-        const exists = await fileExists(project);
+        const exists = await fileExists(local_path);
         if (!exists && !createMissing) {
             core.info(`  Skipped: file does not exist and create-missing is false`);
             return {
@@ -33648,12 +33688,12 @@ async function syncFile(config, sourceToken, createMissing) {
             };
         }
         // Fetch from source
-        const gitSource = (0, github_1.createGitHubSource)(source, sourcePath, ref);
+        const gitSource = (0, github_1.createGitHubSource)(source, source_path, ref);
         core.info(`  Fetching from ${gitSource.toString()}`);
         const fetchResult = await gitSource.fetch(sourceToken);
         const newContent = fetchResult.content;
         // Compare with existing content
-        const existingContent = exists ? await readFile(project) : null;
+        const existingContent = exists ? await readFile(local_path) : null;
         if (existingContent !== null && existingContent === newContent) {
             core.info(`  Skipped: no changes`);
             return {
@@ -33663,10 +33703,10 @@ async function syncFile(config, sourceToken, createMissing) {
             };
         }
         // Write the new content
-        await writeFile(project, newContent);
+        await writeFile(local_path, newContent);
         const isNew = existingContent === null;
         const status = isNew ? 'created' : 'updated';
-        core.info(`  ${isNew ? 'Created' : 'Updated'}: ${project}`);
+        core.info(`  ${isNew ? 'Created' : 'Updated'}: ${local_path}`);
         return {
             config,
             status,
@@ -33688,9 +33728,11 @@ async function syncFile(config, sourceToken, createMissing) {
  * Sync all files and return summary
  */
 async function syncFiles(inputs) {
-    const { files, sourceToken, createMissing, failOnError } = inputs;
+    const { sources, sourceToken, createMissing, failOnError } = inputs;
+    // Normalize sources into flat file configs
+    const normalizedConfigs = (0, config_1.normalizeSources)(sources);
     const results = [];
-    for (const config of files) {
+    for (const config of normalizedConfigs) {
         const result = await syncFile(config, sourceToken, createMissing);
         results.push(result);
         // If failOnError is true and this file failed, stop processing

@@ -211,7 +211,7 @@ export async function createOrUpdatePr(
   const isDraft = summary.allFailed;
 
   // Generate PR body and commit message
-  const prBody = generatePrBody(summary, inputs.schedule);
+  const prBody = generatePrBody(summary);
   const finalCommitMessage = generateCommitMessage(summary, commitMessage);
 
   const octokit = github.getOctokit(githubToken);

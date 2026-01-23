@@ -40,7 +40,6 @@ jobs:
                   source_path: workflows/ci.yml
                 - local_path: .eslintrc.js
                   source_path: configs/.eslintrc.js
-          schedule: '0 9 * * 1'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
@@ -57,7 +56,6 @@ jobs:
 | `pr-labels`      | ❌       | `boilerplate,automated`         | Comma-separated labels                                   |
 | `pr-branch`      | ❌       | `boilerplate-sync`              | Branch name prefix                                       |
 | `commit-message` | ❌       | `chore: sync boilerplate files` | Commit message                                           |
-| `schedule`       | ❌       | -                               | Cron expression for documentation (displayed in PR body) |
 
 ### Sources Configuration Format
 

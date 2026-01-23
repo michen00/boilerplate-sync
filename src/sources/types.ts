@@ -138,7 +138,6 @@ export interface ActionInputs {
   prLabels: string[];
   prBranch: string;
   commitMessage: string;
-  schedule?: string;
 }
 
 /**

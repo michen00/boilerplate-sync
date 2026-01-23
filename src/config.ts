@@ -203,7 +203,6 @@ export function getInputs(): ActionInputs {
   const prLabels = parseLabels(core.getInput('pr-labels'));
   const prBranch = core.getInput('pr-branch') || 'boilerplate-sync';
   const commitMessage = core.getInput('commit-message') || 'chore: sync boilerplate files';
-  const schedule = core.getInput('schedule') || undefined;
 
   return {
     sources,
@@ -215,7 +214,6 @@ export function getInputs(): ActionInputs {
     prLabels,
     prBranch,
     commitMessage,
-    schedule,
   };
 }
 

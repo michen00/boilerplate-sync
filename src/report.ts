@@ -42,19 +42,13 @@ function formatSkippedRow(result: SyncResult): string {
 /**
  * Generate the PR body markdown
  */
-export function generatePrBody(summary: SyncSummary, schedule?: string): string {
+export function generatePrBody(summary: SyncSummary): string {
   const lines: string[] = [];
 
   lines.push('## 🔄 Boilerplate Sync');
   lines.push('');
   lines.push('This PR updates project files from their boilerplate sources.');
   lines.push('');
-
-  // Add schedule information if provided
-  if (schedule) {
-    lines.push(`**Schedule:** \`${schedule}\``);
-    lines.push('');
-  }
 
   // Updated files section
   if (summary.updated.length > 0) {

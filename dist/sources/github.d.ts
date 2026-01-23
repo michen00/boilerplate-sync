@@ -42,7 +42,7 @@ export declare class GitHubSource implements FileSource {
     getResolvedRef(): string | undefined;
 }
 /**
- * Create a GitHubSource from a FileSyncConfig
+ * Create a GitHubSource from source repository, path, and optional ref
  */
 export declare function createGitHubSource(source: string, path: string, ref?: string): GitHubSource;
 /**

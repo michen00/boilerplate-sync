@@ -64,10 +64,6 @@ inputs:
     required: false
     default: 'chore: sync boilerplate files'
 
-  schedule:
-    description: 'Cron expression for documentation purposes (actual scheduling is done in workflow file)'
-    required: false
-
 outputs:
   has-changes:
     description: 'Whether any files were updated (true/false)'

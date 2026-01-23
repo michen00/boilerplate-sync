@@ -2,7 +2,7 @@ import type { SyncSummary } from './sources/types';
 /**
  * Generate the PR body markdown
  */
-export declare function generatePrBody(summary: SyncSummary, schedule?: string): string;
+export declare function generatePrBody(summary: SyncSummary): string;
 /**
  * Generate a summary for GitHub Actions step summary
  */
