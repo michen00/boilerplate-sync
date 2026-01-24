@@ -2,6 +2,30 @@
 
 A GitHub Action that keeps your project boilerplate files in sync with another repository.
 
+## Inspiration
+
+This project was inspired by [kbrashears5/github-action-file-sync](https://github.com/kbrashears5/github-action-file-sync), which syncs files across repositories using a **push model** — the source repository pushes files to target repositories.
+
+**Boilerplate Sync takes the opposite approach with a pull model:**
+
+| Aspect        | Push Model (file-sync)                         | Pull Model (boilerplate-sync)               |
+| ------------- | ---------------------------------------------- | ------------------------------------------- |
+| Direction     | Source pushes to targets                       | Targets pull from source                    |
+| Control       | Source repo decides what to sync               | Each target repo decides what to sync       |
+| Access        | Source needs write access to all targets       | Targets only need read access to source     |
+| Configuration | Centralized in source repo                     | Distributed in each target repo             |
+| Review        | Changes applied directly or via PR from source | Changes go through PR review in target repo |
+
+The pull model is ideal when:
+
+- Target repos want full control over what they sync and when
+- You don't want a central repo with write access to many repositories
+
+The push model is ideal when:
+
+- You want centralized control over what all repos should have
+- You need to enforce consistency across many repositories at once
+
 ## Features
 
 - 🔄 **Automatic syncing** - Keep project files up-to-date with boilerplate sources
