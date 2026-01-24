@@ -100,10 +100,7 @@ type-check: ## Run TypeScript type checking
 	npm run type-check
 
 .PHONY: check
-check: install ## Run all checks (lint, type-check, tests)
-	npm run lint
-	npm run type-check
-	npm run test
+check: install run-pre-commit lint type-check test ## Run all checks (lint, type-check, tests)
 
 .PHONY: clean
 TO_REMOVE := \
@@ -111,7 +108,7 @@ TO_REMOVE := \
     dist \
     node_modules
 clean: ## Remove build artifacts and temporary files
-	@echo $(TO_REMOVE) | xargs -n 1 -P 4 $(RM)
+	@echo $(TO_REMOVE) | xargs -n 1 -P 3 $(RM)
 
 ######################
 ## Pre-commit hooks ##
