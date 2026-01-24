@@ -1,1 +1,1 @@
-{"version":3,"file":"","sourceRoot":"","sources":["file:///Users/Michael.Chen/repos/boilerplate-sync/src/sync.ts"],"names":[],"mappings":"AASA,OAAO,KAAK,EAGV,WAAW,EACX,YAAY,EACb,MAAM,iBAAiB,CAAC;AA0KzB;;GAEG;AACH,wBAAsB,SAAS,CAAC,MAAM,EAAE,YAAY,GAAG,OAAO,CAAC,WAAW,CAAC,CAoD1E"}
+{"version":3,"file":"","sourceRoot":"","sources":["file:///src/sync.ts"],"names":[],"mappings":"AASA,OAAO,KAAK,EAGV,WAAW,EACX,YAAY,EACb,MAAM,iBAAiB,CAAC;AA0KzB;;GAEG;AACH,wBAAsB,SAAS,CAAC,MAAM,EAAE,YAAY,GAAG,OAAO,CAAC,WAAW,CAAC,CAoD1E"}
