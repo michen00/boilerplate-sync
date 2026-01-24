@@ -9,7 +9,16 @@ ci:
 
     for more information, see https://pre-commit.ci
 
+default_install_hook_types:
+  - commit-msg
+  - pre-commit
+  - pre-push
+  - prepare-commit-msg
+
 default_stages: [pre-commit]
+
+exclude: dist
+
 repos:
   # maintenance
   - repo: https://github.com/pre-commit/sync-pre-commit-deps
@@ -50,7 +59,7 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-added-large-files
-        args: ["--maxkb=1024"]
+        args: ['--maxkb=1024']
       - id: check-case-conflict
       - id: check-executables-have-shebangs
       - id: check-merge-conflict
@@ -77,7 +86,7 @@ repos:
     rev: v0.47.0
     hooks:
       - id: markdownlint
-        args: ["--fix"]
+        args: ['--fix']
 
   # linting
   - repo: https://github.com/pre-commit/pre-commit-hooks
