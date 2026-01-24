@@ -24,6 +24,9 @@ npm run lint              # ESLint
 npm run type-check        # TypeScript type checking
 make check                # All checks: pre-commit, lint, type-check, test
 
+# Coverage
+npx vitest run --coverage # Run tests with coverage report
+
 # Pre-commit
 make run-pre-commit       # Run pre-commit hooks manually
 make enable-pre-commit    # Enable hooks
@@ -72,9 +75,23 @@ YAML sources input
 - `Octokit.git.getTree()` - List all files for glob matching (recursive tree)
 - `minimatch` - Glob pattern matching against tree results
 
+## Key Files
+
+- `action.yml` - Action definition (inputs/outputs/branding)
+- `src/index.ts` - Entry point, wires everything together
+- `src/sources/types.ts` - All TypeScript interfaces
+- `tests/` - Vitest test files (mirror src/ structure)
+
 ## Code Conventions
 
 - Single quotes (Prettier configured)
 - Strict TypeScript (`strict: true` in tsconfig)
 - `ConfigError` class for user-facing validation errors
 - Per-source tokens: `sourceToken` field allows different credentials per source repo
+
+## Gotchas
+
+- **Always rebuild dist/**: After any `src/` changes, run `npm run build` and commit `dist/` together with source
+- **dist/ is committed**: Unlike typical projects, `dist/` is checked into git (required for GitHub Actions)
+- **pre-commit required**: Install with `pip install pre-commit` or `brew install pre-commit` before `make develop`
+- **Tests in tests/**: Test files mirror src/ structure (e.g., `config.test.ts` tests `config.ts`)
