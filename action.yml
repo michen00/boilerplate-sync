@@ -18,21 +18,6 @@ inputs:
         - file_pairs: (optional) array of file mappings with local_path and optional source_path
       At least one of default_files or file_pairs is required per source.
       Glob patterns supported in default_files: *, **, ?, [abc], {a,b}
-      Example:
-        sources: |
-          - source: org/boilerplate
-            ref: main
-            default_files:
-              - .eslintrc.js
-              - .prettierrc
-              - .github/ISSUE_TEMPLATE/*.md
-            file_pairs:
-              - local_path: .github/workflows/ci.yml
-                source_path: workflows/ci.yml
-          - source: org/private-templates
-            source-token: \${{ secrets.PRIVATE_PAT }}
-            default_files:
-              - config.json
     required: true
   github-token:
     description: GitHub token for accessing source repos
