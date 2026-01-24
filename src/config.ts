@@ -55,6 +55,34 @@ function validateFileMapping(
 }
 
 /**
+ * Validate default_files array (simple string list)
+ */
+function validateDefaultFiles(
+  files: unknown,
+  sourceIndex: number
+): string[] {
+  if (!Array.isArray(files)) {
+    throw new ConfigError(
+      `Source ${sourceIndex + 1}: 'default_files' must be an array`
+    );
+  }
+
+  const validated: string[] = [];
+  const fileArray = files as unknown[];
+  for (let i = 0; i < fileArray.length; i++) {
+    const file: unknown = fileArray[i];
+    if (typeof file !== 'string' || !file.trim()) {
+      throw new ConfigError(
+        `Source ${sourceIndex + 1}, default_files[${i}]: must be a non-empty string`
+      );
+    }
+    validated.push(file.trim());
+  }
+
+  return validated;
+}
+
+/**
  * Validate a single source config entry
  */
 function validateSourceConfig(
@@ -91,28 +119,48 @@ function validateSourceConfig(
     );
   }
 
-  // Validate required 'files' array
-  if (!Array.isArray(obj.files)) {
+  // Validate optional 'source-token' field
+  if (obj['source-token'] !== undefined && typeof obj['source-token'] !== 'string') {
     throw new ConfigError(
-      `Source ${index + 1}: 'files' is required and must be an array`
+      `Source ${index + 1}: 'source-token' must be a string if provided`
     );
   }
 
-  if (obj.files.length === 0) {
-    throw new ConfigError(
-      `Source ${index + 1}: 'files' array cannot be empty`
+  // Validate optional 'default_files' array
+  let defaultFiles: string[] | undefined;
+  if (obj.default_files !== undefined) {
+    defaultFiles = validateDefaultFiles(obj.default_files, index);
+  }
+
+  // Validate optional 'file_pairs' array
+  let filePairs: FileMapping[] | undefined;
+  if (obj.file_pairs !== undefined) {
+    if (!Array.isArray(obj.file_pairs)) {
+      throw new ConfigError(
+        `Source ${index + 1}: 'file_pairs' must be an array`
+      );
+    }
+    filePairs = obj.file_pairs.map((file, fileIndex) =>
+      validateFileMapping(file, index, fileIndex)
     );
   }
 
-  // Validate each file mapping
-  const files = obj.files.map((file, fileIndex) =>
-    validateFileMapping(file, index, fileIndex)
-  );
+  // Require at least one of default_files or file_pairs
+  const hasDefaultFiles = defaultFiles && defaultFiles.length > 0;
+  const hasFilePairs = filePairs && filePairs.length > 0;
+
+  if (!hasDefaultFiles && !hasFilePairs) {
+    throw new ConfigError(
+      `Source ${index + 1}: at least one of 'default_files' or 'file_pairs' is required`
+    );
+  }
 
   return {
     source: obj.source.trim(),
     ref: typeof obj.ref === 'string' ? obj.ref.trim() : undefined,
-    files,
+    'source-token': typeof obj['source-token'] === 'string' ? obj['source-token'] : undefined,
+    default_files: defaultFiles,
+    file_pairs: filePairs,
   };
 }
 
@@ -155,30 +203,34 @@ export function normalizeSources(
   const normalized: NormalizedFileSyncConfig[] = [];
 
   for (const source of sources) {
-    for (const file of source.files) {
-      normalized.push({
-        local_path: file.local_path,
-        source_path: file.source_path ?? file.local_path,
-        source: source.source,
-        ref: source.ref,
-      });
+    // Process default_files (local_path === source_path)
+    if (source.default_files) {
+      for (const filePath of source.default_files) {
+        normalized.push({
+          local_path: filePath,
+          source_path: filePath,
+          source: source.source,
+          ref: source.ref,
+          sourceToken: source['source-token'],
+        });
+      }
+    }
+
+    // Process file_pairs (mapped paths)
+    if (source.file_pairs) {
+      for (const file of source.file_pairs) {
+        normalized.push({
+          local_path: file.local_path,
+          source_path: file.source_path ?? file.local_path,
+          source: source.source,
+          ref: source.ref,
+          sourceToken: source['source-token'],
+        });
+      }
     }
   }
 
   return normalized;
-}
-
-/**
- * Parse comma-separated labels into array
- */
-function parseLabels(labelsInput: string): string[] {
-  if (!labelsInput.trim()) {
-    return [];
-  }
-  return labelsInput
-    .split(',')
-    .map(label => label.trim())
-    .filter(label => label.length > 0);
 }
 
 /**
@@ -193,27 +245,14 @@ export function getInputs(): ActionInputs {
     throw new ConfigError('github-token is required');
   }
 
-  // source-token defaults to github-token
-  const sourceToken = core.getInput('source-token') || githubToken;
-
   const createMissing = core.getBooleanInput('create-missing');
   const failOnError = core.getBooleanInput('fail-on-error');
-
-  const prTitle = core.getInput('pr-title') || 'chore: sync boilerplate files';
-  const prLabels = parseLabels(core.getInput('pr-labels'));
-  const prBranch = core.getInput('pr-branch') || 'boilerplate-sync';
-  const commitMessage = core.getInput('commit-message') || 'chore: sync boilerplate files';
 
   return {
     sources,
     githubToken,
-    sourceToken,
     createMissing,
     failOnError,
-    prTitle,
-    prLabels,
-    prBranch,
-    commitMessage,
   };
 }
 
@@ -222,7 +261,8 @@ export function getInputs(): ActionInputs {
  */
 export function logConfig(inputs: ActionInputs): void {
   const totalFiles = inputs.sources.reduce(
-    (sum, source) => sum + source.files.length,
+    (sum, source) =>
+      sum + (source.default_files?.length ?? 0) + (source.file_pairs?.length ?? 0),
     0
   );
 
@@ -231,15 +271,25 @@ export function logConfig(inputs: ActionInputs): void {
   core.info(`  Files to sync: ${totalFiles}`);
   core.info(`  Create missing: ${inputs.createMissing}`);
   core.info(`  Fail on error: ${inputs.failOnError}`);
-  core.info(`  PR branch: ${inputs.prBranch}`);
-  core.info(`  PR labels: ${inputs.prLabels.join(', ') || '(none)'}`);
-  
+
   core.startGroup('Sources configuration');
   for (const source of inputs.sources) {
-    core.info(`  ${source.source}@${source.ref ?? '(default)'}:`);
-    for (const file of source.files) {
-      const sourcePath = file.source_path ?? file.local_path;
-      core.info(`    ${file.local_path} <- ${sourcePath}`);
+    const hasCustomToken = source['source-token'] ? ' (custom token)' : '';
+    core.info(`  ${source.source}@${source.ref ?? '(default)'}${hasCustomToken}:`);
+
+    // Log default_files
+    if (source.default_files) {
+      for (const filePath of source.default_files) {
+        core.info(`    ${filePath}`);
+      }
+    }
+
+    // Log file_pairs
+    if (source.file_pairs) {
+      for (const file of source.file_pairs) {
+        const sourcePath = file.source_path ?? file.local_path;
+        core.info(`    ${file.local_path} <- ${sourcePath}`);
+      }
     }
   }
   core.endGroup();

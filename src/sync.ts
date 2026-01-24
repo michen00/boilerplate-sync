@@ -50,17 +50,20 @@ async function writeFile(filePath: string, content: string): Promise<void> {
  */
 async function syncFile(
   config: NormalizedFileSyncConfig,
-  sourceToken: string,
+  fallbackToken: string,
   createMissing: boolean
 ): Promise<SyncResult> {
-  const { local_path, source_path, source, ref } = config;
+  const { local_path, source_path, source, ref, sourceToken } = config;
+
+  // Use per-source token if specified, otherwise fall back to github-token
+  const token = sourceToken ?? fallbackToken;
 
   core.info(`Syncing: ${local_path}`);
 
   try {
     // Check if project file exists
     const exists = await fileExists(local_path);
-    
+
     if (!exists && !createMissing) {
       core.info(`  Skipped: file does not exist and create-missing is false`);
       return {
@@ -73,8 +76,8 @@ async function syncFile(
     // Fetch from source
     const gitSource = createGitHubSource(source, source_path, ref);
     core.info(`  Fetching from ${gitSource.toString()}`);
-    
-    const fetchResult = await gitSource.fetch(sourceToken);
+
+    const fetchResult = await gitSource.fetch(token);
     const newContent = fetchResult.content;
 
     // Compare with existing content
@@ -94,7 +97,7 @@ async function syncFile(
 
     const isNew = existingContent === null;
     const status = isNew ? 'created' : 'updated';
-    
+
     core.info(`  ${isNew ? 'Created' : 'Updated'}: ${local_path}`);
 
     return {
@@ -106,7 +109,7 @@ async function syncFile(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     core.warning(`  Failed: ${message}`);
-    
+
     return {
       config,
       status: 'failed',
@@ -119,7 +122,7 @@ async function syncFile(
  * Sync all files and return summary
  */
 export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
-  const { sources, sourceToken, createMissing, failOnError } = inputs;
+  const { sources, githubToken, createMissing, failOnError } = inputs;
 
   // Normalize sources into flat file configs
   const normalizedConfigs = normalizeSources(sources);
@@ -127,7 +130,8 @@ export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
   const results: SyncResult[] = [];
 
   for (const config of normalizedConfigs) {
-    const result = await syncFile(config, sourceToken, createMissing);
+    // githubToken is used as fallback when no per-source token is specified
+    const result = await syncFile(config, githubToken, createMissing);
     results.push(result);
 
     // If failOnError is true and this file failed, stop processing

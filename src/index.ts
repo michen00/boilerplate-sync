@@ -1,7 +1,6 @@
 import * as core from '@actions/core';
 import { getInputs, logConfig, ConfigError } from './config';
 import { syncFiles } from './sync';
-import { createOrUpdatePr, shouldCreatePr } from './pr';
 import { generateStepSummary } from './report';
 import type { ActionOutputs, SyncSummary } from './sources/types';
 
@@ -13,33 +12,18 @@ function setOutputs(outputs: ActionOutputs): void {
   core.setOutput('updated-count', outputs.updatedCount.toString());
   core.setOutput('failed-count', outputs.failedCount.toString());
   core.setOutput('skipped-count', outputs.skippedCount.toString());
-  
-  if (outputs.prNumber !== undefined) {
-    core.setOutput('pr-number', outputs.prNumber.toString());
-  }
-  
-  if (outputs.prUrl !== undefined) {
-    core.setOutput('pr-url', outputs.prUrl);
-  }
-  
   core.setOutput('summary', JSON.stringify(outputs.summary));
 }
 
 /**
- * Build outputs from sync summary and PR result
+ * Build outputs from sync summary
  */
-function buildOutputs(
-  summary: SyncSummary,
-  prNumber?: number,
-  prUrl?: string
-): ActionOutputs {
+function buildOutputs(summary: SyncSummary): ActionOutputs {
   return {
     hasChanges: summary.hasChanges,
     updatedCount: summary.updated.length + summary.created.length,
     failedCount: summary.failed.length,
     skippedCount: summary.skipped.length,
-    prNumber,
-    prUrl,
     summary,
   };
 }
@@ -64,29 +48,16 @@ async function run(): Promise<void> {
       .addRaw(generateStepSummary(summary))
       .write();
 
-    // Determine if we need to create a PR
-    if (shouldCreatePr(summary)) {
-      core.info('');
-      core.info('Creating pull request...');
-      
-      const prResult = await createOrUpdatePr(inputs, summary);
-      
-      const outputs = buildOutputs(summary, prResult.number, prResult.url);
-      setOutputs(outputs);
+    // Set outputs
+    const outputs = buildOutputs(summary);
+    setOutputs(outputs);
 
-      if (prResult.isDraft) {
-        core.warning(
-          `Created draft PR #${prResult.number} because all files failed to sync`
-        );
-      } else {
-        core.info(`PR #${prResult.number} ready for review: ${prResult.url}`);
-      }
+    if (summary.hasChanges) {
+      core.info('');
+      core.info('Changes detected - files have been updated in the workspace');
     } else {
       core.info('');
-      core.info('No changes detected and no failures - skipping PR creation');
-      
-      const outputs = buildOutputs(summary);
-      setOutputs(outputs);
+      core.info('No changes detected');
     }
 
     // Fail the action if there were failures and fail-on-error is true

@@ -1,0 +1,61 @@
+name: Sync Template Files
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9am
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Sync boilerplate files
+        uses: michen00/boilerplate-sync@v1
+        with:
+          - source: michen00/template
+            # ref: main
+            default_files: |
+              - .gitlint
+              - .editorconfig
+              - .github/workflows/lint-github-actions.yml
+            # file_pairs:
+            #   - local_path: .gitlint
+            #     source_path: .dotfiles/.gitlint
+            #   - local_path: .editorconfig
+            #     source_path: editor-configs/.editorconfig
+            #   - local_path: .github/workflows/lint-github-actions.yml
+            #     source_path: .github/workflows/lint-actions.yml
+          # - source: your-org/private-repo
+          #   source-token: ${{ secrets.BOILERPLATE_PAT }}
+          #   default_files: [file1, file2]
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fail-on-error: true
+          # create-missing: false
+
+      - name: Create a pull request
+        if: steps.sync.outputs.has-changes == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: boilerplate-sync/${{ github.run_id }}
+          delete-branch: true
+          title: "chore: sync boilerplate files"
+          body: |
+            ## Boilerplate Sync
+
+            This PR updates project files from their boilerplate sources.
+
+            | Status | Count |
+            |--------|-------|
+            | Updated | ${{ steps.sync.outputs.updated-count }} |
+            | Skipped | ${{ steps.sync.outputs.skipped-count }} |
+            | Failed | ${{ steps.sync.outputs.failed-count }} |
+          labels: |
+            boilerplate
+            automated

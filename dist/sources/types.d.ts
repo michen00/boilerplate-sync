@@ -15,8 +15,12 @@ export interface SourceConfig {
     source: string;
     /** Git ref (branch, tag, SHA) - optional, uses default branch if not specified */
     ref?: string;
-    /** Files to sync from this source */
-    files: FileMapping[];
+    /** Token for accessing private source repos (falls back to github-token) */
+    'source-token'?: string;
+    /** Simple list of files where local_path === source_path */
+    default_files?: string[];
+    /** Files with mapped paths (local_path and optional source_path) */
+    file_pairs?: FileMapping[];
 }
 /**
  * Normalized file sync configuration (internal use)
@@ -31,6 +35,8 @@ export interface NormalizedFileSyncConfig {
     source: string;
     /** Git ref (branch, tag, SHA) - optional, uses default branch if not specified */
     ref?: string;
+    /** Token for accessing this source (undefined means use github-token) */
+    sourceToken?: string;
 }
 /**
  * @deprecated Use NormalizedFileSyncConfig instead
@@ -118,13 +124,8 @@ export interface SyncSummary {
 export interface ActionInputs {
     sources: SourceConfig[];
     githubToken: string;
-    sourceToken: string;
     createMissing: boolean;
     failOnError: boolean;
-    prTitle: string;
-    prLabels: string[];
-    prBranch: string;
-    commitMessage: string;
 }
 /**
  * Action outputs
@@ -134,8 +135,6 @@ export interface ActionOutputs {
     updatedCount: number;
     failedCount: number;
     skippedCount: number;
-    prNumber?: number;
-    prUrl?: string;
     summary: SyncSummary;
 }
 //# sourceMappingURL=types.d.ts.map

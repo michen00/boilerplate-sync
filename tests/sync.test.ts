@@ -32,16 +32,10 @@ describe('syncFiles', () => {
       {
         source: 'owner/repo',
         ref: 'main',
-        files: [
-          {
-            local_path: 'test.ts',
-            source_path: 'src/test.ts',
-          },
-        ],
+        default_files: ['test.ts'],
       },
     ],
     githubToken: 'gh-token',
-    sourceToken: 'source-token',
     createMissing: true,
     failOnError: false,
     prTitle: 'Test PR',
@@ -109,20 +103,7 @@ describe('syncFiles', () => {
       sources: [
         {
           source: 'owner/repo',
-          files: [
-            {
-              local_path: 'updated.ts',
-              source_path: 'src/updated.ts',
-            },
-            {
-              local_path: 'created.ts',
-              source_path: 'src/created.ts',
-            },
-            {
-              local_path: 'skipped.ts',
-              source_path: 'src/skipped.ts',
-            },
-          ],
+          default_files: ['updated.ts', 'created.ts', 'skipped.ts'],
         },
       ],
     };
@@ -153,6 +134,55 @@ describe('syncFiles', () => {
     expect(summary.total).toBe(3);
   });
 
+  it('handles file_pairs with different source paths', async () => {
+    const inputs: ActionInputs = {
+      ...mockInputs,
+      sources: [
+        {
+          source: 'owner/repo',
+          file_pairs: [
+            { local_path: 'local.ts', source_path: 'src/remote.ts' },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old content');
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const summary = await syncFiles(inputs);
+
+    expect(summary.updated.length).toBe(1);
+    expect(summary.updated[0].config.local_path).toBe('local.ts');
+    expect(summary.updated[0].config.source_path).toBe('src/remote.ts');
+  });
+
+  it('handles combined default_files and file_pairs', async () => {
+    const inputs: ActionInputs = {
+      ...mockInputs,
+      sources: [
+        {
+          source: 'owner/repo',
+          default_files: ['default.ts'],
+          file_pairs: [
+            { local_path: 'mapped.ts', source_path: 'src/mapped.ts' },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old content');
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const summary = await syncFiles(inputs);
+
+    expect(summary.updated.length).toBe(2);
+  });
+
   it('stops processing on first failure when fail-on-error is true', async () => {
     const { createGitHubSource } = await import('../src/sources/github');
 
@@ -172,16 +202,7 @@ describe('syncFiles', () => {
       sources: [
         {
           source: 'owner/repo',
-          files: [
-            {
-              local_path: 'failing.ts',
-              source_path: 'src/failing.ts',
-            },
-            {
-              local_path: 'should-not-process.ts',
-              source_path: 'src/should-not-process.ts',
-            },
-          ],
+          default_files: ['failing.ts', 'should-not-process.ts'],
         },
       ],
     };
@@ -209,5 +230,68 @@ describe('syncFiles', () => {
 
     expect(summary.allFailed).toBe(true);
     expect(summary.failed.length).toBe(1);
+  });
+
+  it('uses per-source token when provided', async () => {
+    const { createGitHubSource } = await import('../src/sources/github');
+    const mockFetch = vi.fn(async () => ({
+      content: 'mock content',
+      resolvedRef: 'main',
+    }));
+
+    vi.mocked(createGitHubSource).mockImplementation(() => ({
+      toString: () => 'owner/repo@main:file.ts',
+      fetch: mockFetch,
+      type: 'github',
+      getSourceId: () => 'owner/repo',
+      getRef: () => 'main',
+    }));
+
+    const inputs: ActionInputs = {
+      ...mockInputs,
+      sources: [
+        {
+          source: 'owner/private-repo',
+          'source-token': 'private-token',
+          default_files: ['file.ts'],
+        },
+      ],
+    };
+
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old content');
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    await syncFiles(inputs);
+
+    // The fetch should be called with the source-specific token
+    expect(mockFetch).toHaveBeenCalledWith('private-token');
+  });
+
+  it('falls back to github-token when no source-token is provided', async () => {
+    const { createGitHubSource } = await import('../src/sources/github');
+    const mockFetch = vi.fn(async () => ({
+      content: 'mock content',
+      resolvedRef: 'main',
+    }));
+
+    vi.mocked(createGitHubSource).mockImplementation(() => ({
+      toString: () => 'owner/repo@main:file.ts',
+      fetch: mockFetch,
+      type: 'github',
+      getSourceId: () => 'owner/repo',
+      getRef: () => 'main',
+    }));
+
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old content');
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    await syncFiles(mockInputs);
+
+    // The fetch should be called with the github-token as fallback
+    expect(mockFetch).toHaveBeenCalledWith('gh-token');
   });
 });

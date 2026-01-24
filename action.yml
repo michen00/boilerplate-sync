@@ -1,5 +1,5 @@
 name: 'Boilerplate Sync'
-description: 'Sync project files from boilerplate repositories and create a PR with updates'
+description: 'Sync project files from boilerplate repositories'
 author: 'Your Name'
 
 branding:
@@ -11,28 +11,31 @@ inputs:
     description: |
       YAML array of source repositories. Each source contains:
         - source: GitHub repo in 'owner/repo' format
-        - ref: (optional) git ref (branch, tag, commit SHA) - applies to all files from this source
-        - files: array of file mappings, each with:
-          - local_path: path in this repo to update
-          - source_path: (optional) path to file in source repo, defaults to local_path
+        - ref: (optional) git ref (branch, tag, commit SHA)
+        - source-token: (optional) token for private repos (falls back to github-token)
+        - default_files: (optional) simple list of files where local_path === source_path
+        - file_pairs: (optional) array of file mappings with local_path and optional source_path
+      At least one of default_files or file_pairs is required per source.
       Example:
         sources: |
           - source: org/boilerplate
             ref: main
-            files:
+            default_files:
+              - .eslintrc.js
+              - .prettierrc
+            file_pairs:
               - local_path: .github/workflows/ci.yml
                 source_path: workflows/ci.yml
-              - local_path: .eslintrc.js
+          - source: org/private-templates
+            source-token: ${{ secrets.PRIVATE_PAT }}
+            default_files:
+              - config.json
     required: true
 
   github-token:
-    description: 'GitHub token for creating PRs in this repo'
+    description: 'GitHub token for accessing source repos'
     required: true
     default: ${{ github.token }}
-
-  source-token:
-    description: 'GitHub token for accessing source repos (if private). Defaults to github-token.'
-    required: false
 
   create-missing:
     description: 'Create project files that do not exist yet'
@@ -43,26 +46,6 @@ inputs:
     description: 'Fail the action if any file sync fails'
     required: false
     default: 'false'
-
-  pr-title:
-    description: 'Title for the created PR'
-    required: false
-    default: 'chore: sync boilerplate files'
-
-  pr-labels:
-    description: 'Comma-separated labels to add to the PR'
-    required: false
-    default: 'boilerplate,automated'
-
-  pr-branch:
-    description: 'Branch name prefix for the PR (run ID will be appended)'
-    required: false
-    default: 'boilerplate-sync'
-
-  commit-message:
-    description: 'Commit message for file updates'
-    required: false
-    default: 'chore: sync boilerplate files'
 
 outputs:
   has-changes:
@@ -76,12 +59,6 @@ outputs:
 
   skipped-count:
     description: 'Number of files skipped (unchanged)'
-
-  pr-number:
-    description: 'Pull request number if created'
-
-  pr-url:
-    description: 'Pull request URL if created'
 
   summary:
     description: 'JSON summary of all sync operations'

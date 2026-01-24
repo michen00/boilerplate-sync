@@ -1,15 +1,14 @@
 # Boilerplate Sync
 
-A GitHub Action that keeps your project files in sync with boilerplate repositories. Automatically creates pull requests when boilerplate files are updated.
+A GitHub Action that keeps your project boilerplate files in sync with another repository.
 
 ## Features
 
 - 🔄 **Automatic syncing** - Keep project files up-to-date with boilerplate sources
-- 📝 **Pull request workflow** - Changes are proposed via PR, not committed directly
 - 🆕 **Create missing files** - Optionally create new files when boilerplate adds them
-- 📊 **Detailed reports** - PR body shows what changed, what was skipped, and what failed
-- ⚠️ **Error handling** - Failed syncs create draft PRs to surface issues
+- 📊 **Detailed reports** - Step summary shows what changed, what was skipped, and what failed
 - 🔐 **Private repo support** - Use separate tokens for source repositories
+- 🔧 **Composable** - Pairs with [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request) for PR creation
 
 ## Quick Start
 
@@ -30,114 +29,174 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: michen00/boilerplate-sync@v1
+      - name: Sync boilerplate files
+        uses: michen00/boilerplate-sync@v1
+        id: sync
         with:
           sources: |
             - source: my-org/boilerplate
               ref: main
-              files:
+              default_files:
+                - .eslintrc.js
+                - .prettierrc
+              file_pairs:
                 - local_path: .github/workflows/ci.yml
                   source_path: workflows/ci.yml
-                - local_path: .eslintrc.js
-                  source_path: configs/.eslintrc.js
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Pull Request
+        if: steps.sync.outputs.has-changes == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: boilerplate-sync/${{ github.run_id }}
+          delete-branch: true
+          title: 'chore: sync boilerplate files'
+          body: |
+            ## Boilerplate Sync
+
+            Updated: ${{ steps.sync.outputs.updated-count }}
+            Skipped: ${{ steps.sync.outputs.skipped-count }}
+            Failed: ${{ steps.sync.outputs.failed-count }}
+          labels: |
+            boilerplate
+            automated
 ```
 
 ## Inputs
 
-| Input            | Required | Default                         | Description                                              |
-| ---------------- | -------- | ------------------------------- | -------------------------------------------------------- |
-| `sources`        | ✅       | -                               | YAML array of source repositories (see below)            |
-| `github-token`   | ✅       | `${{ github.token }}`           | Token for creating PRs                                   |
-| `source-token`   | ❌       | Same as `github-token`          | Token for accessing source repos (for private repos)     |
-| `create-missing` | ❌       | `true`                          | Create project files that don't exist yet                |
-| `fail-on-error`  | ❌       | `false`                         | Fail the action if any file sync fails                   |
-| `pr-title`       | ❌       | `chore: sync boilerplate files` | PR title                                                 |
-| `pr-labels`      | ❌       | `boilerplate,automated`         | Comma-separated labels                                   |
-| `pr-branch`      | ❌       | `boilerplate-sync`              | Branch name prefix                                       |
-| `commit-message` | ❌       | `chore: sync boilerplate files` | Commit message                                           |
+| Input            | Required | Default               | Description                                   |
+| ---------------- | -------- | --------------------- | --------------------------------------------- |
+| `sources`        | ✅       | -                     | YAML array of source repositories (see below) |
+| `github-token`   | ✅       | `${{ github.token }}` | Token for accessing source repos              |
+| `create-missing` | ❌       | `true`                | Create project files that don't exist yet     |
+| `fail-on-error`  | ❌       | `false`               | Fail the action if any file sync fails        |
 
 ### Sources Configuration Format
 
 The `sources` array groups files by their source repository. Each source contains:
 
-| Field     | Required | Description                                                              |
-| --------- | -------- | ------------------------------------------------------------------------ |
-| `source`  | ✅       | Source repository in `owner/repo` format                                 |
-| `ref`     | ❌       | Git ref (branch, tag, SHA) - applies to all files from this source. Defaults to the source repo's default branch |
-| `files`   | ✅       | Array of file mappings (see below)                                      |
+| Field           | Required | Description                                                                                                      |
+| --------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `source`        | ✅       | Source repository in `owner/repo` format                                                                         |
+| `ref`           | ❌       | Git ref (branch, tag, SHA) - applies to all files from this source. Defaults to the source repo's default branch |
+| `source-token`  | ❌       | Token for private source repos (falls back to `github-token`)                                                    |
+| `default_files` | ❌\*     | Simple list of files where local path equals source path                                                         |
+| `file_pairs`    | ❌\*     | Array of file mappings with explicit paths (see below)                                                           |
 
-Each file mapping in the `files` array:
+\*At least one of `default_files` or `file_pairs` is required per source.
 
-| Field        | Required | Description                                                              |
-| ------------ | -------- | ------------------------------------------------------------------------ |
-| `local_path` | ✅       | Path in your repository to update                                        |
-| `source_path`| ❌       | Path to the file in the source repository. Defaults to `local_path` if not specified |
+Each file mapping in `file_pairs`:
+
+| Field         | Required | Description                                                                          |
+| ------------- | -------- | ------------------------------------------------------------------------------------ |
+| `local_path`  | ✅       | Path in your repository to update                                                    |
+| `source_path` | ❌       | Path to the file in the source repository. Defaults to `local_path` if not specified |
 
 ```yaml
 sources: |
-  # Sync multiple files from boilerplate's main branch
+  # Sync files with same paths in both repos
   - source: my-org/boilerplate
     ref: main
-    files:
-      - local_path: .github/workflows/ci.yml
-        source_path: workflows/ci.yml
-      - local_path: .eslintrc.js
-        source_path: configs/.eslintrc.js
-  # Sync from a specific tag
+    default_files:
+      - .eslintrc.js
+      - .prettierrc
+
+  # Sync files with different paths
   - source: my-org/boilerplate
     ref: v2.0.0
-    files:
+    file_pairs:
+      - local_path: .github/workflows/ci.yml
+        source_path: workflows/ci.yml
       - local_path: tsconfig.json
         source_path: configs/tsconfig.strict.json
-      - local_path: .prettierrc
-        # source_path defaults to .prettierrc
+
+  # Mix both formats + private repo with custom token
+  - source: my-org/private-templates
+    source-token: ${{ secrets.PRIVATE_PAT }}
+    default_files:
+      - config.json
+    file_pairs:
+      - local_path: .env.example
+        source_path: templates/.env.example
 ```
 
 ## Outputs
 
-| Output          | Description                         |
-| --------------- | ----------------------------------- |
-| `has-changes`   | `true` if any files were updated    |
-| `updated-count` | Number of files updated or created  |
-| `failed-count`  | Number of files that failed to sync |
-| `skipped-count` | Number of files skipped (unchanged) |
-| `pr-number`     | PR number if created                |
-| `pr-url`        | PR URL if created                   |
-| `summary`       | JSON summary of all operations      |
+| Output          | Type     | Description                                                                     |
+| --------------- | -------- | ------------------------------------------------------------------------------- |
+| `has-changes`   | `string` | `"true"` if any files were updated or created, `"false"` otherwise. Always set. |
+| `updated-count` | `string` | Number of files updated or created. Always set.                                 |
+| `failed-count`  | `string` | Number of files that failed to sync. Always set.                                |
+| `skipped-count` | `string` | Number of files skipped (no changes detected). Always set.                      |
+| `summary`       | `JSON`   | Full sync summary with details on each file. Always set.                        |
 
 ## Examples
+
+### Real Working Example
+
+This repository includes a real, working example workflow at [`.github/workflows/sync-template.yml`](.github/workflows/sync-template.yml) that syncs multiple files from a [template repository for Python projects](https://github.com/michen00/template):
+
+You can copy this workflow file and adapt it for your own needs. Simply modify the `sources` configuration to point to your template repository and add or remove files as needed.
 
 ### Basic Usage
 
 Sync a few config files on a weekly schedule:
 
 ```yaml
-- uses: your-org/boilerplate-sync@v1
-  with:
-    sources: |
-      - source: my-org/boilerplate
-        files:
-          - local_path: .github/workflows/ci.yml
-            source_path: workflows/ci.yml
-          - local_path: .eslintrc.js
-    github-token: ${{ secrets.GITHUB_TOKEN }}
+name: Sync Boilerplate
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Every Monday at 9am
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync boilerplate files
+        uses: your-org/boilerplate-sync@v1
+        id: sync
+        with:
+          sources: |
+            - source: my-org/boilerplate
+              default_files:
+                - .eslintrc.js
+              file_pairs:
+                - local_path: .github/workflows/ci.yml
+                  source_path: workflows/ci.yml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Pull Request
+        if: steps.sync.outputs.has-changes == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: boilerplate-sync/${{ github.run_id }}
+          title: 'chore: sync boilerplate files'
 ```
 
 ### Private Source Repository
 
-Use a PAT to access private boilerplate repos:
+Use a PAT to access private boilerplate repos by specifying `source-token` per source:
 
 ```yaml
 - uses: your-org/boilerplate-sync@v1
   with:
     sources: |
       - source: my-org/private-boilerplate
-        files:
-          - local_path: .github/workflows/deploy.yml
-            source_path: workflows/deploy.yml
+        source-token: ${{ secrets.BOILERPLATE_PAT }}
+        default_files:
+          - .github/workflows/deploy.yml
+      - source: my-org/public-boilerplate
+        # No source-token needed - uses github-token
+        default_files:
+          - .eslintrc.js
     github-token: ${{ secrets.GITHUB_TOKEN }}
-    source-token: ${{ secrets.BOILERPLATE_PAT }}
 ```
 
 ### Strict Mode
@@ -149,8 +208,8 @@ Fail the workflow if any file fails to sync:
   with:
     sources: |
       - source: my-org/boilerplate
-        files:
-          - local_path: .eslintrc.js
+        default_files:
+          - .eslintrc.js
     github-token: ${{ secrets.GITHUB_TOKEN }}
     fail-on-error: true
 ```
@@ -164,84 +223,68 @@ Only update files that already exist:
   with:
     sources: |
       - source: my-org/boilerplate
-        files:
+        file_pairs:
           - local_path: .github/workflows/ci.yml
             source_path: workflows/ci.yml
     github-token: ${{ secrets.GITHUB_TOKEN }}
     create-missing: false
 ```
 
-### Custom PR Settings
-
-```yaml
-- uses: your-org/boilerplate-sync@v1
-  with:
-    sources: |
-      - source: my-org/boilerplate
-        files:
-          - local_path: .eslintrc.js
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-    pr-title: 'deps: update boilerplate configs'
-    pr-labels: 'dependencies,config'
-    pr-branch: 'auto/boilerplate'
-    commit-message: 'deps: sync boilerplate configs'
-```
-
 ### Using Outputs
 
 ```yaml
-- uses: your-org/boilerplate-sync@v1
+- name: Sync boilerplate files
+  uses: your-org/boilerplate-sync@v1
   id: sync
   with:
     sources: |
       - source: my-org/boilerplate
-        files:
-          - local_path: .eslintrc.js
+        default_files:
+          - .eslintrc.js
     github-token: ${{ secrets.GITHUB_TOKEN }}
 
-- name: Comment on PR
-  if: steps.sync.outputs.pr-number
-  uses: actions/github-script@v7
+- name: Create Pull Request
+  if: steps.sync.outputs.has-changes == 'true'
+  uses: peter-evans/create-pull-request@v8
+  id: cpr
   with:
-    script: |
-      github.rest.issues.createComment({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        issue_number: ${{ steps.sync.outputs.pr-number }},
-        body: 'Boilerplate sync completed! Updated ${{ steps.sync.outputs.updated-count }} files.'
-      })
+    branch: boilerplate-sync/${{ github.run_id }}
+    title: 'chore: sync boilerplate files'
+    body: |
+      Updated: ${{ steps.sync.outputs.updated-count }}
+      Skipped: ${{ steps.sync.outputs.skipped-count }}
+      Failed: ${{ steps.sync.outputs.failed-count }}
+
+- name: Log PR URL
+  if: steps.cpr.outputs.pull-request-url
+  run: echo "PR created at ${{ steps.cpr.outputs.pull-request-url }}"
 ```
 
 ## How It Works
 
 1. **Parse Configuration** - Validates the `sources` input YAML
 2. **Fetch Source Files** - Downloads each file from its source repository using the GitHub API
-3. **Compare & Update** - Compares with existing project files, writes changes
-4. **Create PR** - Creates a pull request with all changes and a detailed summary
+3. **Compare & Update** - Compares with existing project files, writes changes to the workspace
+4. **Output Results** - Sets outputs (`has-changes`, counts, summary) for use by subsequent steps
 
-### PR Behavior
-
-- **Changes detected**: Creates a normal PR with updated files
-- **No changes**: No PR created
-- **All files failed**: Creates a **draft** PR with an empty commit to surface the errors
+The action writes files directly to the workspace. Use [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request) or similar to create a PR from the changes.
 
 ## Permissions
 
-The action requires these permissions:
+When using with `peter-evans/create-pull-request`, your workflow needs these permissions:
 
 ```yaml
 permissions:
-  contents: write # To push branches
-  pull-requests: write # To create PRs
+  contents: write # To write files and push branches
+  pull-requests: write # To create PRs (for peter-evans/create-pull-request)
 ```
 
-If using a custom `source-token` for private repositories, ensure it has `repo` scope.
+If using a custom `source-token` for private source repositories, ensure the token has `repo` scope.
 
 ## Limitations
 
 - Only supports GitHub repositories as sources (raw HTTP URLs planned for future)
 - Files are replaced entirely (no merge/diff support)
-- One PR per workflow run (branch name includes run ID)
 - **No dependency analysis** - The action does not understand relationships between files or detect when syncing one file requires changes to other files
 - **No context awareness** - Project-specific customizations may be overwritten without warning
 
