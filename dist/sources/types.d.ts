@@ -37,6 +37,8 @@ export interface NormalizedFileSyncConfig {
     ref?: string;
     /** Token for accessing this source (undefined means use github-token) */
     sourceToken?: string;
+    /** Original glob pattern if this config was expanded from a glob */
+    expandedFrom?: string;
 }
 /**
  * @deprecated Use NormalizedFileSyncConfig instead

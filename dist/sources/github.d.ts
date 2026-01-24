@@ -49,4 +49,16 @@ export declare function createGitHubSource(source: string, path: string, ref?: s
  * Clear the default branch cache (useful for testing)
  */
 export declare function clearBranchCache(): void;
+/**
+ * Check if a path contains glob pattern characters
+ */
+export declare function isGlobPattern(path: string): boolean;
+/**
+ * Get the default branch for a repository (standalone function for use outside GitHubSource)
+ */
+export declare function getDefaultBranch(owner: string, repo: string, token: string): Promise<string>;
+/**
+ * List all files in a repository matching a glob pattern
+ */
+export declare function listFilesMatchingGlob(owner: string, repo: string, pattern: string, ref: string | undefined, token: string): Promise<string[]>;
 //# sourceMappingURL=github.d.ts.map
