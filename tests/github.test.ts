@@ -1,20 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GitHubSource, createGitHubSource, clearBranchCache } from '../src/sources/github';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  GitHubSource,
+  clearBranchCache,
+  createGitHubSource,
+} from '../src/sources/github';
 
 // Mock Octokit
-vi.mock('@octokit/rest', () => {
-  const mockRepos = {
-    get: vi.fn(),
-    getContent: vi.fn(),
-  };
+const mockRepos = {
+  get: vi.fn(),
+  getContent: vi.fn(),
+};
 
-  return {
-    Octokit: vi.fn(() => ({
-      repos: mockRepos,
-    })),
-    __mockRepos: mockRepos,
-  };
-});
+vi.mock('@octokit/rest', () => ({
+  Octokit: class {
+    repos = mockRepos;
+  },
+}));
 
 describe('GitHubSource', () => {
   beforeEach(() => {
@@ -63,10 +64,6 @@ describe('GitHubSource', () => {
 
   describe('fetch', () => {
     it('fetches file content successfully', async () => {
-      const { Octokit } = await import('@octokit/rest');
-      const mockOctokit = new Octokit();
-      const mockRepos = (mockOctokit as any).repos;
-
       mockRepos.get.mockResolvedValue({
         data: { default_branch: 'main' },
       });
@@ -91,10 +88,6 @@ describe('GitHubSource', () => {
     });
 
     it('uses default branch when ref not specified', async () => {
-      const { Octokit } = await import('@octokit/rest');
-      const mockOctokit = new Octokit();
-      const mockRepos = (mockOctokit as any).repos;
-
       mockRepos.get.mockResolvedValue({
         data: { default_branch: 'develop' },
       });
@@ -118,24 +111,16 @@ describe('GitHubSource', () => {
     });
 
     it('throws error when file not found', async () => {
-      const { Octokit } = await import('@octokit/rest');
-      const mockOctokit = new Octokit();
-      const mockRepos = (mockOctokit as any).repos;
-
       mockRepos.getContent.mockRejectedValue(new Error('Not Found'));
 
       const source = createGitHubSource('owner/repo', 'missing.ts', 'main');
 
       await expect(source.fetch('token')).rejects.toThrow(
-        'File not found: missing.ts in owner/repo@main'
+        'File not found: missing.ts in owner/repo@main',
       );
     });
 
     it('throws error when path is a directory', async () => {
-      const { Octokit } = await import('@octokit/rest');
-      const mockOctokit = new Octokit();
-      const mockRepos = (mockOctokit as any).repos;
-
       mockRepos.getContent.mockResolvedValue({
         data: [
           { type: 'file', name: 'file1.ts' },
@@ -146,21 +131,17 @@ describe('GitHubSource', () => {
       const source = createGitHubSource('owner/repo', 'directory/', 'main');
 
       await expect(source.fetch('token')).rejects.toThrow(
-        "Path 'directory/' is a directory, not a file"
+        "Path 'directory/' is a directory, not a file",
       );
     });
 
     it('throws error on authentication failure', async () => {
-      const { Octokit } = await import('@octokit/rest');
-      const mockOctokit = new Octokit();
-      const mockRepos = (mockOctokit as any).repos;
-
       mockRepos.getContent.mockRejectedValue(new Error('Bad credentials'));
 
       const source = createGitHubSource('owner/private-repo', 'file.ts', 'main');
 
       await expect(source.fetch('invalid-token')).rejects.toThrow(
-        'Authentication failed for owner/private-repo. Check your token.'
+        'Authentication failed for owner/private-repo. Check your token.',
       );
     });
   });
@@ -168,11 +149,11 @@ describe('GitHubSource', () => {
   describe('parseSource', () => {
     it('throws error for invalid source format', () => {
       expect(() => createGitHubSource('invalid', 'path', 'main')).toThrow(
-        "Invalid source format: 'invalid'. Expected 'owner/repo' format."
+        "Invalid source format: 'invalid'. Expected 'owner/repo' format.",
       );
 
       expect(() => createGitHubSource('owner/repo/extra', 'path', 'main')).toThrow(
-        "Invalid source format: 'owner/repo/extra'. Expected 'owner/repo' format."
+        "Invalid source format: 'owner/repo/extra'. Expected 'owner/repo' format.",
       );
     });
   });

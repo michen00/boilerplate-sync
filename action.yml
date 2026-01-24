@@ -1,10 +1,11 @@
-name: 'Boilerplate Sync'
-description: 'Sync project files from boilerplate repositories'
-author: 'Your Name'
+---
+name: Boilerplate Sync
+description: Sync project files from boilerplate repositories
+author: Your Name
 
 branding:
-  icon: 'refresh-cw'
-  color: 'blue'
+  icon: refresh-cw
+  color: blue
 
 inputs:
   sources:
@@ -13,9 +14,10 @@ inputs:
         - source: GitHub repo in 'owner/repo' format
         - ref: (optional) git ref (branch, tag, commit SHA)
         - source-token: (optional) token for private repos (falls back to github-token)
-        - default_files: (optional) simple list of files where local_path === source_path
+        - default_files: (optional) list of file globs where local_path === source_path
         - file_pairs: (optional) array of file mappings with local_path and optional source_path
       At least one of default_files or file_pairs is required per source.
+      Glob patterns supported in default_files: *, **, ?, [abc], {a,b}
       Example:
         sources: |
           - source: org/boilerplate
@@ -23,6 +25,7 @@ inputs:
             default_files:
               - .eslintrc.js
               - .prettierrc
+              - .github/ISSUE_TEMPLATE/*.md
             file_pairs:
               - local_path: .github/workflows/ci.yml
                 source_path: workflows/ci.yml
@@ -31,38 +34,31 @@ inputs:
             default_files:
               - config.json
     required: true
-
   github-token:
-    description: 'GitHub token for accessing source repos'
+    description: GitHub token for accessing source repos
     required: true
     default: ${{ github.token }}
-
   create-missing:
-    description: 'Create project files that do not exist yet'
+    description: Create project files that do not exist yet
     required: false
     default: 'true'
-
   fail-on-error:
-    description: 'Fail the action if any file sync fails'
+    description: Fail the action if any file sync fails
     required: false
     default: 'false'
 
 outputs:
   has-changes:
-    description: 'Whether any files were updated (true/false)'
-
+    description: Whether any files were updated (true/false)
   updated-count:
-    description: 'Number of files successfully updated'
-
+    description: Number of files successfully updated
   failed-count:
-    description: 'Number of files that failed to sync'
-
+    description: Number of files that failed to sync
   skipped-count:
-    description: 'Number of files skipped (unchanged)'
-
+    description: Number of files skipped (unchanged)
   summary:
-    description: 'JSON summary of all sync operations'
+    description: JSON summary of all sync operations
 
 runs:
-  using: 'node20'
-  main: 'dist/index.js'
+  using: node20
+  main: dist/index.js

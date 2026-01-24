@@ -9,6 +9,7 @@ A GitHub Action that keeps your project boilerplate files in sync with another r
 - 📊 **Detailed reports** - Step summary shows what changed, what was skipped, and what failed
 - 🔐 **Private repo support** - Use separate tokens for source repositories
 - 🔧 **Composable** - Pairs with [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request) for PR creation
+- 📁 **Glob patterns** - Sync multiple files with patterns like `*.md` or `**/*.yml`
 
 ## Quick Start
 
@@ -80,7 +81,7 @@ The `sources` array groups files by their source repository. Each source contain
 | `source`        | ✅       | Source repository in `owner/repo` format                                                                         |
 | `ref`           | ❌       | Git ref (branch, tag, SHA) - applies to all files from this source. Defaults to the source repo's default branch |
 | `source-token`  | ❌       | Token for private source repos (falls back to `github-token`)                                                    |
-| `default_files` | ❌\*     | Simple list of files where local path equals source path                                                         |
+| `default_files` | ❌\*     | List of files where local path equals source path. Supports glob patterns (see below)                            |
 | `file_pairs`    | ❌\*     | Array of file mappings with explicit paths (see below)                                                           |
 
 \*At least one of `default_files` or `file_pairs` is required per source.
@@ -119,6 +120,30 @@ sources: |
       - local_path: .env.example
         source_path: templates/.env.example
 ```
+
+### Glob Patterns
+
+The `default_files` field supports glob patterns for syncing multiple files at once:
+
+| Pattern | Description                        | Example                        |
+| ------- | ---------------------------------- | ------------------------------ |
+| `*`     | Match any characters except `/`    | `*.md` matches `README.md`     |
+| `**`    | Match any characters including `/` | `**/*.ts` matches nested `.ts` |
+| `?`     | Match single character             | `file?.ts` matches `file1.ts`  |
+| `[abc]` | Match character class              | `[abc].ts` matches `a.ts`      |
+| `{a,b}` | Match alternatives                 | `*.{js,ts}` matches both       |
+
+```yaml
+sources: |
+  - source: my-org/boilerplate
+    default_files:
+      - .eslintrc.js                      # Exact file
+      - .github/ISSUE_TEMPLATE/*.md       # All .md files in directory
+      - .github/workflows/*.yml           # All workflow files
+      - configs/**/*.json                 # Recursive JSON files
+```
+
+When a glob pattern matches multiple files, each matched file is synced with `local_path === source_path`.
 
 ## Outputs
 

@@ -39,6 +39,8 @@ export interface NormalizedFileSyncConfig {
   ref?: string;
   /** Token for accessing this source (undefined means use github-token) */
   sourceToken?: string;
+  /** Original glob pattern if this config was expanded from a glob */
+  expandedFrom?: string;
 }
 
 /**
@@ -76,16 +78,16 @@ export interface FetchResult {
 export interface FileSource {
   /** Type identifier */
   readonly type: 'github' | 'http';
-  
+
   /** Fetch the file content */
   fetch(token?: string): Promise<FetchResult>;
-  
+
   /** Human-readable string for logging and PR body */
   toString(): string;
-  
+
   /** Get the source identifier (e.g., 'owner/repo') */
   getSourceId(): string;
-  
+
   /** Get the ref used */
   getRef(): string | undefined;
 }

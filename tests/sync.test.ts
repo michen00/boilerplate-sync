@@ -24,6 +24,8 @@ vi.mock('../src/sources/github', () => ({
       resolvedRef: 'main',
     })),
   })),
+  isGlobPattern: vi.fn(() => false), // Default to not a glob pattern
+  listFilesMatchingGlob: vi.fn(async () => []),
 }));
 
 describe('syncFiles', () => {
@@ -38,10 +40,6 @@ describe('syncFiles', () => {
     githubToken: 'gh-token',
     createMissing: true,
     failOnError: false,
-    prTitle: 'Test PR',
-    prLabels: ['test'],
-    prBranch: 'test-branch',
-    commitMessage: 'Test commit',
   };
 
   beforeEach(() => {

@@ -8,7 +8,7 @@ export function generateStepSummary(summary: SyncSummary): string {
 
   lines.push('# Boilerplate Sync Results');
   lines.push('');
-  
+
   lines.push('| Status | Count |');
   lines.push('|--------|-------|');
   lines.push(`| ✅ Updated | ${summary.updated.length} |`);

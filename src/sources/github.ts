@@ -1,4 +1,5 @@
 import { Octokit } from '@octokit/rest';
+import { minimatch } from 'minimatch';
 import type { FileSource, FetchResult } from './types';
 
 /**
@@ -12,7 +13,7 @@ const defaultBranchCache = new Map<string, string>();
  */
 export class GitHubSource implements FileSource {
   readonly type = 'github' as const;
-  
+
   private readonly owner: string;
   private readonly repo: string;
   private resolvedRef?: string;
@@ -45,7 +46,7 @@ export class GitHubSource implements FileSource {
    */
   private async getDefaultBranch(octokit: Octokit): Promise<string> {
     const cacheKey = `${this.owner}/${this.repo}`;
-    
+
     const cached = defaultBranchCache.get(cacheKey);
     if (cached) {
       return cached;
@@ -169,4 +170,93 @@ export function createGitHubSource(
  */
 export function clearBranchCache(): void {
   defaultBranchCache.clear();
+}
+
+/**
+ * Check if a path contains glob pattern characters
+ */
+export function isGlobPattern(path: string): boolean {
+  // Match glob special characters: *, ?, [, ], {, }
+  return /[*?[\]{}]/.test(path);
+}
+
+/**
+ * Get the default branch for a repository (standalone function for use outside GitHubSource)
+ */
+export async function getDefaultBranch(
+  owner: string,
+  repo: string,
+  token: string
+): Promise<string> {
+  const cacheKey = `${owner}/${repo}`;
+
+  const cached = defaultBranchCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const octokit = new Octokit({ auth: token });
+  const { data } = await octokit.repos.get({ owner, repo });
+
+  defaultBranchCache.set(cacheKey, data.default_branch);
+  return data.default_branch;
+}
+
+/**
+ * List all files in a repository matching a glob pattern
+ */
+export async function listFilesMatchingGlob(
+  owner: string,
+  repo: string,
+  pattern: string,
+  ref: string | undefined,
+  token: string
+): Promise<string[]> {
+  const octokit = new Octokit({ auth: token });
+
+  // Resolve ref to default branch if not provided
+  const resolvedRef = ref ?? await getDefaultBranch(owner, repo, token);
+
+  // Get the tree SHA for the ref
+  const { data: refData } = await octokit.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${resolvedRef}`,
+  }).catch(async () => {
+    // If not a branch, try as a tag
+    return octokit.git.getRef({
+      owner,
+      repo,
+      ref: `tags/${resolvedRef}`,
+    });
+  }).catch(async () => {
+    // If not a tag, assume it's a commit SHA and get the commit
+    const { data: commit } = await octokit.git.getCommit({
+      owner,
+      repo,
+      commit_sha: resolvedRef,
+    });
+    return { data: { object: { sha: commit.tree.sha } } };
+  });
+
+  // Fetch the full tree recursively
+  const { data: tree } = await octokit.git.getTree({
+    owner,
+    repo,
+    tree_sha: refData.object.sha,
+    recursive: 'true',
+  });
+
+  // Filter to only blobs (files) and match against the pattern
+  const matchingFiles: string[] = [];
+
+  for (const item of tree.tree) {
+    if (item.type === 'blob' && item.path) {
+      if (minimatch(item.path, pattern, { matchBase: false })) {
+        matchingFiles.push(item.path);
+      }
+    }
+  }
+
+  return matchingFiles.sort();
 }
