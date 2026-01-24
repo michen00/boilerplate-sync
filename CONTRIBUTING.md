@@ -13,13 +13,6 @@ The project has defined a [code of conduct](https://github.com/michen00/.github/
 > - Refer this project in your project's README
 > - Mention the project at local meetups and tell your friends/colleagues
 
-## TODO
-
-- update the demo on README.md for the eyeball status bar feature
-- refactor code: optimizations and improvements are welcome
-- add a workflow to [update license copyright years](https://github.com/marketplace/actions/update-license-copyright-year-s#i-want-my-pull-requests-to-be-automatically-merged)
-- expose the status message duration as a configuration option (`vscode.window.setStatusBarMessage(message, 2500);`)
-
 <!-- omit in toc -->
 
 ## Table of Contents
@@ -33,7 +26,10 @@ The project has defined a [code of conduct](https://github.com/michen00/.github/
     - [Before Submitting an Enhancement](#before-submitting-an-enhancement)
     - [How do I submit a good enhancement suggestion?](#how-do-i-submit-a-good-enhancement-suggestion)
   - [Your first code contribution](#your-first-code-contribution)
-- [Creating a release](#creating-a-release)
+    - [Quick start](#quick-start)
+    - [Dev shortcuts](#dev-shortcuts)
+    - [Committing your changes](#committing-your-changes)
+    - [Before opening a Pull Request](#before-opening-a-pull-request)
 
 ## I have a question
 
@@ -105,13 +101,7 @@ Enhancement suggestions are tracked as [GitHub issues][issues].
 
 ### Your first code contribution
 
-#### Prerequisites
-
-- Node.js 20.x or 22.x
-- npm (comes with Node.js)
-- VSCode (for testing the extension)
-
-#### Getting started
+#### Quick start
 
 Start by [forking the repository](https://docs.github.com/en/github/getting-started-with-github/fork-a-repo), i.e. copying the repository to your account to grant you write access. Continue with cloning the forked repository to your local machine.
 
@@ -127,26 +117,17 @@ make develop
 git switch -c <branch name>
 ```
 
-#### Development workflow
+#### Dev shortcuts
 
-Make your changes to the code, then verify everything works:
-
-```sh
-npm run compile    # Type check + lint + build
-npm run test:unit  # Run unit tests (fast, < 5 seconds)
+```bash
+make          # Show all make targets
+make check    # Run all checks (pre-commit, lint, type-check, tests)
+make rebuild  # Clean and build from scratch
 ```
-
-To test the extension manually, press `F5` in VSCode to launch an Extension Development Host.
 
 #### Committing your changes
 
-Commit the changes using the [conventional commits](https://www.conventionalcommits.org) message style:
-
-```sh
-git commit -am 'feat: add new feature'
-```
-
-Common commit types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+Commit the changes using the [conventional commits](https://www.conventionalcommits.org) message style.
 
 Continue with pushing the local commits to GitHub:
 
@@ -163,25 +144,6 @@ git push origin <branch name>
 - Follow the code standards and conventions of the project
 
 And finally, when you are satisfied with your changes, open a new PR.
-
-## Creating a release
-
-1. Prepare a release branch: `git switch main && git pull && git switch -c release/vX.Y.Z`
-2. Update `CHANGELOG.md`:
-   - Run `make update-unreleased` to update the Unreleased section (this auto-commits).
-   - Make any additional edits (e.g., rename heading from "Unreleased" to the version).
-3. Update version in `package.json`.
-4. Build and test: `make rebuild && make check`
-5. Test locally: `make install-vsix`
-6. Commit remaining changes: `git commit -am "chore: release vX.Y.Z"`
-7. Push the branch and open a PR: `git push -u origin release/vX.Y.Z`
-8. Merge the PR into `main` (via GitHub).
-9. Get the latest main: `git switch main && git pull`
-10. Create a signed tag: `git tag -a vX.Y.Z -m vX.Y.Z -s`
-11. Push with tags: `git push --follow-tags`
-12. Create a GitHub release from the tag: `make release VERSION=vX.Y.Z`
-13. Review the release notes and edit them if needed (via GitHub web UI).
-14. Publish to the VSCode Marketplace: `make publish`
 
 [issues]: https://github.com/michen00/boilerplate-sync/issues
 [issues_new]: https://github.com/michen00/boilerplate-sync/issues/new

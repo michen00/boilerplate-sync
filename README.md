@@ -2,9 +2,18 @@
 
 A GitHub Action that keeps your project boilerplate files in sync with another repository.
 
+## Features
+
+- 🔄 **Automatic syncing** - Keep project files up-to-date with boilerplate sources
+- 🆕 **Create missing files** - Optionally create new files when boilerplate adds them
+- 📊 **Detailed reports** - Step summary shows what changed, what was skipped, and what failed
+- 🔐 **Private repo support** - Use separate tokens for source repositories
+- 🔧 **Composable** - Pairs with `[peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)` for PR creation
+- 📁 **Glob patterns** - Sync multiple files with patterns like `*.md` or `**/*.yml`
+
 ## Inspiration
 
-This project was inspired by [kbrashears5/github-action-file-sync](https://github.com/kbrashears5/github-action-file-sync), which syncs files across repositories using a **push model** — the source repository pushes files to target repositories.
+This project was inspired by `[kbrashears5/github-action-file-sync](https://github.com/kbrashears5/github-action-file-sync)`, which syncs files across repositories using a **push model** — the source repository pushes files to target repositories.
 
 **Boilerplate Sync takes the opposite approach with a pull model:**
 
@@ -25,15 +34,6 @@ The push model is ideal when:
 
 - You want centralized control over what all repos should have
 - You need to enforce consistency across many repositories at once
-
-## Features
-
-- 🔄 **Automatic syncing** - Keep project files up-to-date with boilerplate sources
-- 🆕 **Create missing files** - Optionally create new files when boilerplate adds them
-- 📊 **Detailed reports** - Step summary shows what changed, what was skipped, and what failed
-- 🔐 **Private repo support** - Use separate tokens for source repositories
-- 🔧 **Composable** - Pairs with [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request) for PR creation
-- 📁 **Glob patterns** - Sync multiple files with patterns like `*.md` or `**/*.yml`
 
 ## Quick Start
 
@@ -163,7 +163,7 @@ sources: |
     default_files:
       - .eslintrc.js                      # Exact file
       - .github/ISSUE_TEMPLATE/*.md       # All .md files in directory
-      - .github/workflows/*.yml           # All workflow files
+      - .github/workflows/*.y{,a}ml       # All workflow YAML files
       - configs/**/*.json                 # Recursive JSON files
 ```
 
@@ -206,23 +206,22 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v6
       - name: Sync boilerplate files
-        uses: your-org/boilerplate-sync@v1
+        uses: michen00/boilerplate-sync@v1
         id: sync
         with:
           sources: |
             - source: my-org/boilerplate
               default_files:
-                - .eslintrc.js
-              file_pairs:
+                - .eslintrc.js  # local and source paths are the same
+                - .github/ISSUE_TEMPLATE/*.md  # glob patterns are supported
+              file_pairs:  # glob patterns are NOT supported
                 - local_path: .github/workflows/ci.yml
                   source_path: workflows/ci.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Pull Request
-        if: steps.sync.outputs.has-changes == 'true'
+      - name: Create pull request
         uses: peter-evans/create-pull-request@v8
         with:
           branch: boilerplate-sync/${{ github.run_id }}
@@ -234,7 +233,7 @@ jobs:
 Use a PAT to access private boilerplate repos by specifying `source-token` per source:
 
 ```yaml
-- uses: your-org/boilerplate-sync@v1
+- uses: michen00/boilerplate-sync@v1
   with:
     sources: |
       - source: my-org/private-boilerplate
@@ -244,7 +243,7 @@ Use a PAT to access private boilerplate repos by specifying `source-token` per s
       - source: my-org/public-boilerplate
         # No source-token needed - uses github-token
         default_files:
-          - .eslintrc.js
+          - .*.toml
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
@@ -253,12 +252,12 @@ Use a PAT to access private boilerplate repos by specifying `source-token` per s
 Fail the workflow if any file fails to sync:
 
 ```yaml
-- uses: your-org/boilerplate-sync@v1
+- uses: michen00/boilerplate-sync@v1
   with:
     sources: |
       - source: my-org/boilerplate
         default_files:
-          - .eslintrc.js
+          - .*.yml
     github-token: ${{ secrets.GITHUB_TOKEN }}
     fail-on-error: true
 ```
@@ -268,7 +267,7 @@ Fail the workflow if any file fails to sync:
 Only update files that already exist:
 
 ```yaml
-- uses: your-org/boilerplate-sync@v1
+- uses: michen00/boilerplate-sync@v1
   with:
     sources: |
       - source: my-org/boilerplate
@@ -283,29 +282,32 @@ Only update files that already exist:
 
 ```yaml
 - name: Sync boilerplate files
-  uses: your-org/boilerplate-sync@v1
+  uses: michen00/boilerplate-sync@v1
   id: sync
   with:
     sources: |
       - source: my-org/boilerplate
         default_files:
-          - .eslintrc.js
+          - .reusable-config.yml
     github-token: ${{ secrets.GITHUB_TOKEN }}
 
-- name: Create Pull Request
-  if: steps.sync.outputs.has-changes == 'true'
-  uses: peter-evans/create-pull-request@v8
+- name: Create pull request
   id: cpr
+  uses: peter-evans/create-pull-request@v8
+  needs: sync
   with:
     branch: boilerplate-sync/${{ github.run_id }}
     title: 'chore: sync boilerplate files'
     body: |
+      ## Boilerplate Sync
+
       Updated: ${{ steps.sync.outputs.updated-count }}
       Skipped: ${{ steps.sync.outputs.skipped-count }}
       Failed: ${{ steps.sync.outputs.failed-count }}
 
 - name: Log PR URL
-  if: steps.cpr.outputs.pull-request-url
+  if: steps.sync.outputs.has-changes == 'true'
+  needs: sync
   run: echo "PR created at ${{ steps.cpr.outputs.pull-request-url }}"
 ```
 
@@ -313,14 +315,14 @@ Only update files that already exist:
 
 1. **Parse Configuration** - Validates the `sources` input YAML
 2. **Fetch Source Files** - Downloads each file from its source repository using the GitHub API
-3. **Compare & Update** - Compares with existing project files, writes changes to the workspace
+3. **Update or Create** - Updates or creates each file in the workspace
 4. **Output Results** - Sets outputs (`has-changes`, counts, summary) for use by subsequent steps
 
-The action writes files directly to the workspace. Use [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request) or similar to create a PR from the changes.
+The action writes files directly to the workspace. Use `[peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)` or similar to create a PR from the changes.
 
 ## Permissions
 
-When using with `peter-evans/create-pull-request`, your workflow needs these permissions:
+When using with `[peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)`, your workflow needs these permissions:
 
 ```yaml
 permissions:
@@ -332,8 +334,8 @@ If using a custom `source-token` for private source repositories, ensure the tok
 
 ## Limitations
 
-- Only supports GitHub repositories as sources (raw HTTP URLs planned for future)
-- Files are replaced entirely (no merge/diff support)
+- Only supports GitHub repositories as sources (other sources are planned for future versions depending on user interest)
+- Files are replaced entirely (no partial merge support)
 - **No dependency analysis** - The action does not understand relationships between files or detect when syncing one file requires changes to other files
 - **No context awareness** - Project-specific customizations may be overwritten without warning
 
@@ -362,40 +364,3 @@ This action performs direct file replacement without understanding:
 - Environment-specific settings
 - Files that require coordination with other files
 - Any file where changes could break your build or deployment
-
-## Development
-
-```bash
-# Set up for development (installs dependencies and enables pre-commit hooks)
-make develop
-
-# Build
-make build
-
-# Run all checks (lint, type-check, tests)
-make check
-
-# Individual commands
-make test          # Run tests once
-make test-watch    # Run tests in watch mode
-make lint          # Run ESLint
-make type-check    # Run TypeScript type checking
-
-# Clean and rebuild
-make clean         # Remove build artifacts
-make rebuild       # Clean and build from scratch
-
-# Pre-commit hooks
-make enable-pre-commit  # Enable pre-commit hooks
-make run-pre-commit     # Run pre-commit checks manually
-```
-
-Or use npm directly:
-
-```bash
-npm install
-npm run build
-npm test
-npm run type-check
-npm run lint
-```
