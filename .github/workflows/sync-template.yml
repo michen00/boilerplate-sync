@@ -16,33 +16,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
       - name: Sync files
         id: sync
         uses: michen00/boilerplate-sync@v1
         with:
           sources: |
             - source: michen00/template
-              # ref: main
               default_files:
-                - .github/ISSUE_TEMPLATE/*.md
-                - .gitlint
                 - .editorconfig
+                - .github/workflows/dependabot-automerge.yml
                 - .github/workflows/lint-github-actions.yml
-              # file_pairs:
-              #   - local_path: .gitlint
-              #     source_path: .dotfiles/.gitlint
-              #   - local_path: .editorconfig
-              #     source_path: editor-configs/.editorconfig
-              #   - local_path: .github/workflows/lint-github-actions.yml
-              #     source_path: .github/workflows/lint-actions.yml
-            # - source: your-org/private-repo
-            #   source-token: ${{ secrets.BOILERPLATE_PAT }}
-            #   default_files: [file1, file2]
+                - .github/workflows/lint-github-actions.yml
+                - .github/workflows/pre-commit-autoupdate-automerge.yml
+                - .github/workflows/pre-commit-autoupdate.yml
+                - .gitlint
+                - .markdownlint.yml
+                - .prettierrc
+                - .yamllint
+                - scripts/update-unreleased.sh
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-error: 'true'
-          # create-missing: 'false'
-
       - name: Build PR body
         id: pr-body
         if: steps.sync.outputs.has-changes == 'true'
@@ -84,8 +77,7 @@ jobs:
             }
 
             return body;
-      - name: Create Pull Request
-        if: steps.sync.outputs.has-changes == 'true'
+      - name: Create pull request
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
