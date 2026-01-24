@@ -33,6 +33,7 @@ endif
 _COLOR  := $(shell tput sgr0 2>/dev/null || printf '\033[0m')
 BOLD    := $(shell tput bold 2>/dev/null || printf '\033[1m')
 CYAN    := $(shell tput setaf 6 2>/dev/null || printf '\033[0;36m')
+GREEN   := $(shell tput setaf 2 2>/dev/null || printf '\033[0;32m')
 YELLOW  := $(shell tput setaf 3 2>/dev/null || printf '\033[0;33m')
 
 .DEFAULT_GOAL := help
@@ -117,10 +118,19 @@ clean: ## Remove build artifacts and temporary files
 .PHONY: enable-pre-commit
 enable-pre-commit: ## Enable pre-commit hooks (along with commit-msg and pre-push hooks)
 	@if command -v pre-commit >/dev/null 2>&1; then \
-        pre-commit install --hook-type commit-msg --hook-type pre-commit --hook-type pre-push --hook-type prepare-commit-msg ; \
+        pre-commit install; \
     else \
         echo "$(YELLOW)Warning: pre-commit is not installed. Skipping hook installation.$(_COLOR)"; \
         echo "Install it with: pip install pre-commit (or brew install pre-commit on macOS)"; \
+    fi
+
+.PHONY: disable-pre-commit
+disable-pre-commit: ## Disable pre-commit hooks (removes commit-msg, pre-commit, pre-push, and prepare-commit-msg hooks)
+	@if command -v pre-commit >/dev/null 2>&1; then \
+        $(UV) run pre-commit uninstall; \
+        echo "$(BOLD)$(GREEN)Pre-commit hooks disabled.$(_COLOR)"; \
+    else \
+        echo "$(YELLOW)Warning: pre-commit is not installed. Nothing to disable.$(_COLOR)"; \
     fi
 
 .PHONY: run-pre-commit
