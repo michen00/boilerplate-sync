@@ -35,6 +35,8 @@ The push model is ideal when:
 - You want centralized control over what all repos should have
 - You need to enforce consistency across many repositories at once
 
+This action is designed as a simpler alternative to templating tools for targeted sets of stable files. It is not intended to be a comprehensive solution for all boilerplate needs. Be aware that it can introduce hidden or circular dependencies and may pose security risks, especially when source repositories are untrusted.
+
 ## Quick Start
 
 ```yaml
@@ -349,6 +351,14 @@ This action performs direct file replacement without understanding:
 - Required configuration changes in other files
 - Breaking changes that might affect your project
 - Context-specific customizations your project may need
+
+**Use with caution.**
+
+Key risks to consider:
+
+- **Hidden dependencies** - Synced files may depend on other files or configurations that aren't explicitly synced, leading to broken or incomplete setups
+- **Circular references** - Source repositories that sync from each other can create circular dependencies, causing infinite loops or unexpected behavior
+- **Supply chain risks** - Syncing from untrusted or compromised source repositories can introduce broken or malicious code into your project
 
 **Recommended use cases:**
 
