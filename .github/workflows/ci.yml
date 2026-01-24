@@ -1,3 +1,4 @@
+---
 name: CI
 
 on:
@@ -7,17 +8,39 @@ on:
     branches: [main]
 
 jobs:
+  pre-commit:
+    name: Pre-commit hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pre-commit
+        run: |
+          pip install --upgrade pip
+          pip install --upgrade pre-commit
+      - name: Cache pre-commit hooks
+        id: cache-pre-commit-hooks
+        uses: actions/cache@v5
+        env:
+          CACHE_NUMBER: 0
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}-${{ env.CACHE_NUMBER }} # yamllint disable-line rule:line-length
+      - name: Install pre-commit hooks
+        if: steps.cache-pre-commit-hooks.outputs.cache-hit != 'true'
+        run: |
+          pre-commit install-hooks
+      - name: Run pre-commit hooks
+        run: |
+          pre-commit run --all-files
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@v6
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -47,23 +70,49 @@ jobs:
     needs: build
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Test action (dry run)
+      - name: Test action (smoke test)
         uses: ./
         id: sync
         with:
-          files: |
-            - project: .github/workflows/ci.yml
-              source: actions/checkout
-              path: action.yml
+          sources: |
+            - source: actions/checkout
+              file_pairs:
+                - local_path: .ci-test-nonexistent-file
+                  source_path: LICENSE
           github-token: ${{ github.token }}
-          # This will fail because action.yml != ci.yml format
-          # but it tests that the action runs
-        continue-on-error: true
+          # Map to a non-existent local file with create-missing disabled
+          # This validates the action runs and fetches from GitHub without modifying the repo
+          create-missing: 'false'
 
       - name: Verify outputs
         run: |
           echo "has-changes: ${{ steps.sync.outputs.has-changes }}"
           echo "updated-count: ${{ steps.sync.outputs.updated-count }}"
+          echo "skipped-count: ${{ steps.sync.outputs.skipped-count }}"
           echo "failed-count: ${{ steps.sync.outputs.failed-count }}"
+
+          # Should have no changes
+          if [ "${{ steps.sync.outputs.has-changes }}" != "false" ]; then
+            echo "::error::Expected has-changes=false, got ${{ steps.sync.outputs.has-changes }}"
+            exit 1
+          fi
+
+          # Should have no updated files
+          if [ "${{ steps.sync.outputs.updated-count }}" != "0" ]; then
+            echo "::error::Expected updated-count=0, got ${{ steps.sync.outputs.updated-count }}"
+            exit 1
+          fi
+
+          # Should have skipped the file (doesn't exist locally, create-missing=false)
+          if [ "${{ steps.sync.outputs.skipped-count }}" != "1" ]; then
+            echo "::error::Expected skipped-count=1, got ${{ steps.sync.outputs.skipped-count }}"
+            exit 1
+          fi
+
+          # Should have no failed files
+          if [ "${{ steps.sync.outputs.failed-count }}" != "0" ]; then
+            echo "::error::Expected failed-count=0, got ${{ steps.sync.outputs.failed-count }}"
+            exit 1
+          fi
