@@ -30,7 +30,7 @@ inputs:
               - local_path: .github/workflows/ci.yml
                 source_path: workflows/ci.yml
           - source: org/private-templates
-            source-token: ${{ secrets.PRIVATE_PAT }}
+            source-token: \${{ secrets.PRIVATE_PAT }}
             default_files:
               - config.json
     required: true
