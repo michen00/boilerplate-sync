@@ -69,7 +69,7 @@ jobs:
             **
       - name: Build PR body
         id: pr-body
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           result-encoding: string
           script: |
