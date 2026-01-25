@@ -1,5 +1,5 @@
 ---
-name: Sync boilerplate files
+name: Sync boilerplate files (test)
 
 on:
   schedule:
@@ -32,10 +32,6 @@ jobs:
             - source: michen00/template
               default_files:
                 - .editorconfig
-                - .github/workflows/bot-automerge.yml
-                - .github/workflows/delete-bot-branches-for-closed-prs.yml
-                - .github/workflows/lint-github-actions.yml
-                - .github/workflows/pre-commit-autoupdate.yml
                 - .gitlint
                 - .markdownlint.yml
                 - .prettierrc
