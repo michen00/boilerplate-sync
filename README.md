@@ -8,7 +8,7 @@ A GitHub Action that keeps your project boilerplate files in sync with another r
 - 🆕 **Create missing files** - Optionally create new files when boilerplate adds them
 - 📊 **Detailed reports** - Step summary shows what changed, what was skipped, and what failed
 - 🔐 **Private repo support** - Use separate tokens for source repositories
-- 🔧 **Composable** - Pairs with `[peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)` for PR creation
+- 🔧 **Composable** - Pairs with [`peter-evans/create-pull-request`](https://github.com/peter-evans/create-pull-request) for PR creation
 - 📁 **Glob patterns** - Sync multiple files with patterns like `*.md` or `**/*.yml`
 
 ## Inspiration
