@@ -28,7 +28,6 @@
     "yaml": "^2.3.4"
   },
   "devDependencies": {
-    "@types/minimatch": "^6.0.0",
     "@types/node": "^20.14.10",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
     "@typescript-eslint/parser": "^8.53.1",
