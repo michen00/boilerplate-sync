@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Sync files
         id: sync
-        uses: michen00/boilerplate-sync@v1
+        uses: michen00/boilerplate-sync@main
         with:
           sources: |
             - source: michen00/template
