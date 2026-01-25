@@ -53,6 +53,12 @@ jobs:
             echo "Pre-commit hooks failed. Please review the log for details." >&2
             exit 1
           fi
+      - name: Commit changes
+        uses: iarekylew00t/verified-bot-commit@v2
+        with:
+          message: 'chore: autoupdate pre-commit hooks'
+          files: |
+            .pre-commit-config.yaml
       - name: Push changes and create PR
         uses: peter-evans/create-pull-request@v8
         with:

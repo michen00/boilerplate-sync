@@ -28,10 +28,9 @@ jobs:
             - source: michen00/template
               default_files:
                 - .editorconfig
-                - .github/workflows/dependabot-automerge.yml
+                - .github/workflows/bot-automerge.yml
+                - .github/workflows/delete-bot-branches-for-closed-prs.yml
                 - .github/workflows/lint-github-actions.yml
-                - .github/workflows/lint-github-actions.yml
-                - .github/workflows/pre-commit-autoupdate-automerge.yml
                 - .github/workflows/pre-commit-autoupdate.yml
                 - .gitlint
                 - .markdownlint.yml
