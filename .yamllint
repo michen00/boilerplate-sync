@@ -9,11 +9,10 @@ yaml-files:
 rules:
   comments:
     min-spaces-from-content: 1
-  comments-indentation:
-    ignore: [.github/workflows/sync-template.yml]
   line-length:
     ignore: |
       .github/workflows/greet-new-contributors.yml
+      .github/workflows/pre-commit-autoupdate.yml
       .github/workflows/sync-template-*.yml
     max: 100
     allow-non-breakable-words: true

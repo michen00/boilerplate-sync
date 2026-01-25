@@ -35,7 +35,6 @@ jobs:
                 - .gitlint
                 - .markdownlint.yml
                 - .prettierrc
-                - .yamllint
                 - scripts/update-unreleased.sh
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-error: 'true'
