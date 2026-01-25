@@ -11,6 +11,8 @@ A GitHub Action that keeps your project boilerplate files in sync with another r
 - 🔧 **Composable** - Pairs with [`peter-evans/create-pull-request`](https://github.com/peter-evans/create-pull-request) for PR creation
 - 📁 **Glob patterns** - Sync multiple files with patterns like `*.md` or `**/*.yml`
 
+_Note: This action currently cannot sync `.github/workflows/*.y{,a}ml` files without additional permissions ([e.g.](https://github.com/actions/create-github-app-token)) and configuration (see [discussion](https://github.com/orgs/community/discussions/35410))._
+
 ## Inspiration
 
 This project was inspired by `[kbrashears5/github-action-file-sync](https://github.com/kbrashears5/github-action-file-sync)`, which syncs files across repositories using a **push model** — the source repository pushes files to target repositories.
