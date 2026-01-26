@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BRANCH_NAME: chore/sync-boilerplate/${{ github.run_id }}
+      COMMIT_MESSAGE: 'chore: auto-sync boilerplate files'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -71,7 +72,7 @@ jobs:
           auto-stage: false
           if-no-commit: error
           update-local: false
-          message: 'chore: auto-sync boilerplate files'
+          message: ${{ env.COMMIT_MESSAGE }}
           files: |
             .*
             **/.*
@@ -119,10 +120,16 @@ jobs:
       - name: Create pull request
         uses: peter-evans/create-pull-request@v8
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           base: ${{ github.event.repository.default_branch }}
           branch: ${{ env.BRANCH_NAME }}
-          delete-branch: true
-          title: 'chore: auto-sync boilerplate files'
+
+          title: ${{ env.COMMIT_MESSAGE }}
           body: ${{ steps.pr-body.outputs.result }}
+
+          commit-message: ${{ env.COMMIT_MESSAGE }}
+          signoff: true
+
           sign-commits: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+          delete-branch: true
