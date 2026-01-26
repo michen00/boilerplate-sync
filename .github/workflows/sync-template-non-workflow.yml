@@ -56,9 +56,7 @@ jobs:
       - name: Commit changes
         uses: iarekylew00t/verified-bot-commit@v2
         with:
-          auto-stage: false
           if-no-commit: error
-          update-local: false
           message: 'chore: auto-sync boilerplate files'
           files: |
             **
