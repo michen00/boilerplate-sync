@@ -22,6 +22,8 @@ jobs:
   sync:
     name: Sync boilerplate files
     runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: chore/sync-boilerplate/${{ github.run_id }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -49,6 +51,7 @@ jobs:
         run: |
           set -e
           git add .
+          git switch -c ${{ env.BRANCH_NAME }}
           echo "::debug::$(git diff --cached || echo 'no changes')"
           set +e
           git diff --cached --quiet
@@ -115,7 +118,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: boilerplate-sync/${{ github.run_id }}
+          branch: ${{ env.BRANCH_NAME }}
           delete-branch: true
           title: 'chore: auto-sync boilerplate files'
           body: ${{ steps.pr-body.outputs.result }}
