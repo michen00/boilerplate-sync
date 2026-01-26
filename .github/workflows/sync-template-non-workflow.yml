@@ -63,6 +63,7 @@ jobs:
             exit 1
           fi
           echo '::notice::Changes staged. Proceeding with commit.'
+          git push -u origin ${{ env.BRANCH_NAME }}
       - name: Commit changes
         uses: iarekylew00t/verified-bot-commit@v2
         with:
