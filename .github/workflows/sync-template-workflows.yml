@@ -115,6 +115,3 @@ jobs:
           delete-branch: true
           title: 'chore: auto-sync boilerplate files'
           body: ${{ steps.pr-body.outputs.result }}
-          labels: |
-            automated
-            boilerplate
