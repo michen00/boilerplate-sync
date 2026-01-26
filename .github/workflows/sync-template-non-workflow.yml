@@ -61,11 +61,10 @@ jobs:
       - name: Commit changes
         uses: iarekylew00t/verified-bot-commit@v2
         with:
-          auto-stage: false
           if-no-commit: error
           message: 'chore: auto-sync boilerplate files'
           files: |
-            **
+            '**'
       - name: Build PR body
         id: pr-body
         uses: actions/github-script@v8
