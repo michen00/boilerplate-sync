@@ -8,7 +8,7 @@
     "normalize-sourcemaps": "bash scripts/normalize-sourcemaps.sh",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "type-check": "tsc --noEmit"
   },
   "keywords": [
@@ -28,12 +28,14 @@
     "yaml": "^2.3.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/node": "^20.14.10",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
     "@typescript-eslint/parser": "^8.53.1",
     "@vercel/ncc": "^0.38.1",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.39.2",
+    "globals": "^17.1.0",
     "typescript": "^5.3.2",
     "vitest": "^4.0.18"
   },
