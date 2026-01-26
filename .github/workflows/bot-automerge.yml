@@ -39,10 +39,10 @@ jobs:
         env:
           ACTOR: ${{ github.actor }}
           UPDATE_TYPE: ${{ steps.dependabot.outputs.update-type }}
-          HAS_DO_NOT_MERGE: ${{ contains(github.event.pull_request.labels.*.name, 'do not merge') }}
+          HAS_DO_NOT_MERGE: ${{contains(github.event.pull_request.labels.*.name, 'do not auto-merge') }} # yamllint disable-line rule:line-length
         run: |
           if [ "$HAS_DO_NOT_MERGE" = "true" ]; then
-            echo "::warning::PR has 'do not merge' label, skipping"
+            echo "::warning::PR has 'do not auto-merge' label, skipping"
             echo "should_merge=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
