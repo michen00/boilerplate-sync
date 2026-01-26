@@ -118,6 +118,7 @@ jobs:
 
             return body;
       - name: Create pull request
+        id: create-pr
         uses: peter-evans/create-pull-request@v8
         with:
           base: ${{ github.event.repository.default_branch }}
@@ -133,3 +134,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
           delete-branch: true
+      - name: Trigger required checks and wait
+        if: steps.create-pr.outputs.pull-request-number != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
+        run: |
+          echo "::info::PR #$PR_NUMBER created. Triggering required checks..."
+
+          # Trigger CI workflow to ensure checks run
+          gh workflow run ci.yml --ref ${{ env.BRANCH_NAME }} || echo "::warning::Failed to trigger CI workflow (may already be running)"
