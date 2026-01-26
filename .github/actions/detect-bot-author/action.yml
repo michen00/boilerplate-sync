@@ -5,12 +5,13 @@ description: Check if the issue or PR author is a bot
 outputs:
   is-bot:
     description: "'true' if the author is a bot, 'false' otherwise"
-    value: ${{ steps.check.outputs.result }}
+    value: ${{ steps.bot-author-check.outputs.result }}
 
 runs:
   using: composite
   steps:
     - name: detect bot author
+      id: bot-author-check
       uses: actions/github-script@v8
       with:
         result-encoding: string
