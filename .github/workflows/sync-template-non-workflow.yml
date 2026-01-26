@@ -47,7 +47,12 @@ jobs:
         run: |
           set -e
           git add .
-          if git diff --cached --quiet; then
+          echo "::debug::$(git diff --cached || echo 'no changes')"
+          set +e
+          git diff --cached --quiet
+          exit_code=$?
+          set -e
+          if [ $exit_code -eq 0 ]; then
             echo '::error::Sync action reported changes, but no files were staged. ' \
                  'This may indicate gitignore conflicts or other issues.'
             exit 1
