@@ -47,7 +47,7 @@ jobs:
         run: |
           echo '::notice::No changes detected. Exiting.'
           exit 0
-      - name: Stage changes
+      - name: Stage changes and create branch
         run: |
           set -e
           git add .
@@ -66,6 +66,7 @@ jobs:
       - name: Commit changes
         uses: iarekylew00t/verified-bot-commit@v2
         with:
+          ref: ${{ env.BRANCH_NAME }}
           auto-stage: false
           if-no-commit: error
           update-local: false
@@ -122,3 +123,4 @@ jobs:
           delete-branch: true
           title: 'chore: auto-sync boilerplate files'
           body: ${{ steps.pr-body.outputs.result }}
+          sign-commits: true
