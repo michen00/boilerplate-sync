@@ -43,12 +43,8 @@ jobs:
                 - scripts/update-unreleased.sh
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-error: 'true'
-      - name: Exit if no changes
-        if: steps.sync.outputs.has-changes == 'false'
-        run: |
-          echo '::notice::No changes detected. Exiting.'
-          exit 0
       - name: Stage changes and create branch
+        if: steps.sync.outputs.has-changes == 'true'
         run: |
           set -e
           git add .
@@ -89,6 +85,7 @@ jobs:
           echo '::notice::Changes staged. Proceeding with commit.'
           git push -u origin ${{ env.BRANCH_NAME }}
       - name: Commit changes
+        if: steps.sync.outputs.has-changes == 'true'
         uses: iarekylew00t/verified-bot-commit@v2
         with:
           ref: ${{ env.BRANCH_NAME }}
@@ -101,6 +98,7 @@ jobs:
             **/.*
             **/*
       - name: Build PR body
+        if: steps.sync.outputs.has-changes == 'true'
         id: pr-body
         uses: actions/github-script@v8
         with:
@@ -141,6 +139,7 @@ jobs:
 
             return body;
       - name: Create pull request
+        if: steps.sync.outputs.has-changes == 'true'
         id: create-pr
         uses: peter-evans/create-pull-request@v8
         with:
