@@ -32,7 +32,6 @@ jobs:
           sources: |
             - source: michen00/template
               default_files:
-                - .github/workflows/bot-automerge.yml
                 - .github/workflows/delete-bot-branches-for-closed-prs.yml
                 - .github/workflows/lint-github-actions.yml
                 - .github/workflows/pre-commit-autoupdate.yml

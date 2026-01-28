@@ -34,6 +34,15 @@ jobs:
         uses: dependabot/fetch-metadata@v2
         with:
           github-token: ${{ env.GITHUB_TOKEN }}
+      - name: Build
+        run: make build && make check
+      - name: Commit build changes
+        uses: iarekylew00t/verified-bot-commit@v2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          message: 'build(dist): rebuild the action'
+          files: |
+            dist/
       - name: Check merge eligibility
         id: eligible
         env:
