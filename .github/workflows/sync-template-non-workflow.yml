@@ -53,14 +53,37 @@ jobs:
           set -e
           git add .
           git switch -c ${{ env.BRANCH_NAME }}
-          echo "::debug::$(git diff --cached || echo 'no changes')"
           set +e
-          git diff --cached --quiet
-          exit_code=$?
+          STAGED_DIFF=$(git diff --cached 2>&1 || true)
+          if [ -z "$STAGED_DIFF" ]; then
+            exit_code=0
+          else
+            exit_code=1
+          fi
           set -e
+          echo "::debug::${STAGED_DIFF:-no changes}"
           if [ $exit_code -eq 0 ]; then
-            echo '::error::Sync action reported changes, but no files were staged. ' \
-                 'This may indicate gitignore conflicts or other issues.'
+            echo '::group::Debug: Sync action summary'
+            echo "Sync action reported has-changes: ${{ steps.sync.outputs.has-changes }}"
+            echo "Updated/Created count: ${{ steps.sync.outputs.updated-count }}"
+            echo "Skipped count: ${{ steps.sync.outputs.skipped-count }}"
+            echo "Failed count: ${{ steps.sync.outputs.failed-count }}"
+            SUMMARY_JSON="${{ steps.sync.outputs.summary }}"
+            if [ -n "$SUMMARY_JSON" ]; then
+              echo "Summary JSON:"
+              echo "$SUMMARY_JSON" | jq '.' 2>/dev/null || echo "$SUMMARY_JSON"
+            fi
+            echo '::endgroup::'
+            echo '::group::Debug: Git status'
+            git status --porcelain || echo "git status failed"
+            echo '::endgroup::'
+            echo '::group::Debug: Git diff (working directory)'
+            git diff --name-status || echo "git diff failed"
+            echo '::endgroup::'
+            echo '::group::Debug: Staged changes (should be empty)'
+            git diff --cached --name-status || echo "No staged changes"
+            echo '::endgroup::'
+            echo '::error title=No files staged after sync::Sync action reported changes but no files were staged. Likely causes: gitignored files, gitignore conflicts, or untracked files.'
             exit 1
           fi
           echo '::notice::Changes staged. Proceeding with commit.'
