@@ -60,6 +60,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           if-no-commit: ${{ steps.log-level.outputs.level }}
           message: 'build(dist): rebuild the action'
+          update-local: false
           files: |
             dist/
       - name: Check merge eligibility
