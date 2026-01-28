@@ -36,10 +36,29 @@ jobs:
           github-token: ${{ env.GITHUB_TOKEN }}
       - name: Build
         run: make build && make check
+      - name: Determine if-no-commit log level
+        id: log-level
+        env:
+          ACTOR: ${{ github.actor }}
+          DEPENDENCY_TYPE: ${{ steps.dependabot.outputs.dependency-type }}
+        run: |
+          if [ "$ACTOR" = "pre-commit-ci[bot]" ]; then
+            echo "level=info" >> "$GITHUB_OUTPUT"
+          elif [ "$ACTOR" = "dependabot[bot]" ]; then
+            if [ "$DEPENDENCY_TYPE" = "direct:development" ]; then
+              echo "level=notice" >> "$GITHUB_OUTPUT"
+            else
+              # direct:production or other non-dev dependencies
+              echo "level=error" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "level=warning" >> "$GITHUB_OUTPUT"
+          fi
       - name: Commit build changes
         uses: iarekylew00t/verified-bot-commit@v2
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+          if-no-commit: ${{ steps.log-level.outputs.level }}
           message: 'build(dist): rebuild the action'
           files: |
             dist/
