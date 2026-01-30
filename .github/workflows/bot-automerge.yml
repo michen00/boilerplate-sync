@@ -35,7 +35,24 @@ jobs:
         with:
           github-token: ${{ env.GITHUB_TOKEN }}
       - name: Build
-        run: make build && make check
+        run: make build
+      - name: Install pre-commit
+        run: |
+          pip install --upgrade pip
+          pip install --upgrade pre-commit
+      - name: Cache pre-commit hooks
+        id: cache-pre-commit-hooks
+        uses: actions/cache@v5
+        env:
+          CACHE_NUMBER: 0
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}-${{ env.CACHE_NUMBER }} # yamllint disable-line rule:line-length
+      - name: Install pre-commit hooks
+        if: steps.cache-pre-commit-hooks.outputs.cache-hit != 'true'
+        run: |
+          pre-commit install-hooks
+      - run: make check
       - name: Determine if-no-commit log level
         id: log-level
         env:
