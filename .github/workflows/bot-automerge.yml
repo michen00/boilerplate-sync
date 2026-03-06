@@ -35,7 +35,7 @@ jobs:
         with:
           github-token: ${{ env.GITHUB_TOKEN }}
       - name: Build
-        run: make build
+        run: make rebuild
       - name: Install pre-commit
         run: |
           pip install --upgrade pip
