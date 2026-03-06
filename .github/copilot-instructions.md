@@ -10,6 +10,8 @@ You are working on `boilerplate-sync`, a GitHub Action that syncs files from sou
 2. Run `npm run build` to regenerate `dist/`
 3. Commit both `src/` and `dist/` changes together
 
+When dependencies change (including lockfile-only bumps), treat that as a potential `dist/` change trigger and run `npm run build` to verify. `dist/` may legitimately remain unchanged for some indirect/transitive updates, but the build verification step is still required.
+
 **TypeScript strict mode is enabled.** Avoid `any`. Always handle `undefined` and `null` explicitly.
 
 ## Code Patterns

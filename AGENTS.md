@@ -29,9 +29,11 @@ such as Cursor, GitHub Copilot, Claude, or other automated assistants.
 
 1. Make changes in `src/` and update/add tests as needed.
 2. Do not edit `dist/` by hand. Run `npm run build` to regenerate it.
-3. Include `dist/` changes in the same commit as the source changes.
-4. Update `README.md` or `action.yml` if inputs/outputs or behavior change.
-5. Keep `package-lock.json` in sync when dependencies change.
+3. Treat dependency updates as a potential `dist/` change trigger (especially direct runtime/build-tool dependency updates): run `npm run build` and check whether `dist/` changed.
+4. Include `dist/` changes in the same commit as the source/dependency changes when regenerated.
+5. If `npm run build` produces no `dist/` diff, that can be valid for some updates (for example, certain indirect/transitive dependency bumps), but the build verification step should still be performed.
+6. Update `README.md` or `action.yml` if inputs/outputs or behavior change.
+7. Keep `package-lock.json` in sync when dependencies change.
 
 ## Testing Guidance
 
