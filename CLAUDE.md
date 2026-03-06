@@ -92,6 +92,8 @@ YAML sources input
 ## Gotchas
 
 - **Always rebuild dist/**: After any `src/` changes, run `npm run build` and commit `dist/` together with source
+- **Dependency updates can affect dist/**: When dependencies change (especially direct production/build-tool deps), run `npm run build` and commit `dist/` if regenerated
+- **No-op dist rebuilds can happen**: Some indirect/transitive dependency updates may not change `dist/`, but you should still perform the build verification step
 - **dist/ is committed**: Unlike typical projects, `dist/` is checked into git (required for GitHub Actions)
 - **pre-commit required**: Install with `pip install pre-commit` or `brew install pre-commit` before `make develop`
 - **Tests in tests/**: Test files mirror src/ structure (e.g., `config.test.ts` tests `config.ts`)
