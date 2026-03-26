@@ -62,11 +62,13 @@ jobs:
           if [ "$ACTOR" = "pre-commit-ci[bot]" ]; then
             echo "level=info" >> "$GITHUB_OUTPUT"
           elif [ "$ACTOR" = "dependabot[bot]" ]; then
-            if [ "$DEPENDENCY_TYPE" = "direct:development" ]; then
+            if [ "$DEPENDENCY_TYPE" = "direct:production" ]; then
+              echo "level=error" >> "$GITHUB_OUTPUT"
+            elif [ "$DEPENDENCY_TYPE" = "direct:development" ] || [ "$DEPENDENCY_TYPE" = "indirect" ]; then
               echo "level=notice" >> "$GITHUB_OUTPUT"
             else
-              # direct:production or other non-dev dependencies
-              echo "level=error" >> "$GITHUB_OUTPUT"
+              # Unknown dependency type: keep visible, but don't fail no-op rebuilds.
+              echo "level=warning" >> "$GITHUB_OUTPUT"
             fi
           else
             echo "level=warning" >> "$GITHUB_OUTPUT"
