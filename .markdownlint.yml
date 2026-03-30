@@ -1,5 +1,8 @@
 ---
 default: true
+first-line-heading: false
 line-length: false
 no-duplicate-heading:
   siblings_only: true
+ul-style:
+  style: dash
