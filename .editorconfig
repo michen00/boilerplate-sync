@@ -11,7 +11,7 @@ indent_style = space
 space_redirects = true
 switch_case_indent = true
 
-[*.json,xml]
+[*.{json,xml}]
 indent_size = 2
 indent_style = space
 
@@ -25,7 +25,7 @@ indent_size = 2
 indent_style = space
 max_line_length = 100
 
-[*.{py}]
+[*.py]
 indent_size = 4
 indent_style = space
 

@@ -9,6 +9,14 @@
 
 set -euo pipefail
 
+# readarray requires Bash 4+; macOS /bin/bash is 3.2
+if [[ ${BASH_VERSINFO[0]:-0} -lt 4 ]]; then
+  echo "Error: This script requires Bash 4 or later (readarray)." >&2
+  echo "Current: $BASH_VERSION" >&2
+  echo "On macOS: brew install bash" >&2
+  exit 1
+fi
+
 SCRIPT_NAME=$(basename "$0")
 COMMIT=""
 SHOULD_COMMIT=false
@@ -161,15 +169,30 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Check we're in a git repository
-if [ ! -d .git ]; then
-  echo "Error: Must be run from the root of a git repository." >&2
+# Check we're inside a git work tree (works in worktrees/submodules and subdirectories)
+if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+  echo "Error: Must be run from inside a git repository." >&2
   exit 1
 fi
 
-# Check git cliff is installed
-if ! command -v git-cliff > /dev/null 2>&1 && ! command -v git cliff > /dev/null 2>&1; then
-  echo "Error: git cliff is not installed or not available in PATH" >&2
+# Resolve CHANGELOG to a physical absolute path before changing to repo root
+# (pwd -P resolves symlinks, avoiding /tmp vs /private/tmp mismatches on macOS)
+if [[ "$CHANGELOG" != /* ]]; then
+  CHANGELOG="$(pwd -P)/$CHANGELOG"
+fi
+
+# Move to the repository root so git operations behave consistently
+cd "$(git rev-parse --show-toplevel)"
+REPO_ROOT="$(pwd -P)"
+
+# Convert absolute CHANGELOG back to a repo-relative path for clean messages
+case "$CHANGELOG" in
+  "$REPO_ROOT"/*) CHANGELOG="${CHANGELOG#"$REPO_ROOT/"}" ;;
+esac
+
+# Check git-cliff is installed
+if ! command -v git-cliff > /dev/null 2>&1; then
+  echo "Error: git-cliff is not installed or not available in PATH" >&2
   echo "Install it with: cargo install git-cliff" >&2
   exit 1
 fi
@@ -267,6 +290,7 @@ STAGED_DIFFS_DIR=""
 
 # Helper to re-stage files, preserving partial staging
 restage_other_files() {
+  local file
   if [[ -z "$OTHER_STAGED_FILES" ]]; then
     return
   fi
@@ -276,7 +300,7 @@ restage_other_files() {
     # If we have a saved staged diff, apply it to preserve partial staging
     if [[ -n "$STAGED_DIFFS_DIR" ]] && [[ -f "$patch_file" ]] && [[ -s "$patch_file" ]]; then
       # Apply the saved staged diff to restore exact staging state
-      if ! git apply --cached --allow-empty "$patch_file" 2> /dev/null; then
+      if ! git apply --cached "$patch_file" 2> /dev/null; then
         # Fallback: if patch doesn't apply, try to be smarter about re-staging.
         echo "Warning: Could not restore partial staging for '$file', attempting to stage based on patch type." >&2
         if grep -q '^deleted file mode' "$patch_file"; then
@@ -327,39 +351,55 @@ commit_changelog() {
 # Cleanup function to restore state on error
 cleanup() {
   local exit_code=$?
-  rm -f "$TEMP_FILE" "$CLIFF_OUTPUT" "$HEAD_CHANGELOG" "$EXPECTED_OUTPUT" "$STAGED_CONTENT"
+
+  # Temporarily disable errexit so cleanup steps don't abort the trap
+  set +e
+
+  # Clean up temporary files, guarding against empty variables
+  local temp_files=("$TEMP_FILE" "$CLIFF_OUTPUT" "$HEAD_CHANGELOG" "$EXPECTED_OUTPUT" "$STAGED_CONTENT")
+  for file in "${temp_files[@]}"; do
+    if [[ -n "$file" ]] && [[ -e "$file" ]]; then
+      rm -f "$file"
+    fi
+  done
+
   if [[ $STASHED == true ]] && [[ -n "$STASH_REF" ]]; then
     # Check if stash still exists before trying to pop
     if git stash list | grep -q "^${STASH_REF}"; then
       echo "Restoring stashed changes to ${CHANGELOG}..." >&2
-      git stash pop --quiet "$STASH_REF" 2> /dev/null
+      git stash pop --quiet "$STASH_REF" 2> /dev/null || true
     fi
   fi
-  restage_other_files
+
+  restage_other_files || true
+
   # Clean up temp directory if it still exists
   if [[ -n "$STAGED_DIFFS_DIR" ]] && [[ -d "$STAGED_DIFFS_DIR" ]]; then
-    rm -rf "$STAGED_DIFFS_DIR"
+    rm -rf "$STAGED_DIFFS_DIR" || true
   fi
-  exit $exit_code
+
+  exit "$exit_code"
 }
+
+# Initialize vars used by cleanup before installing the EXIT trap.
+OTHER_STAGED_FILES=""
+
 trap cleanup EXIT
 
 # Track if CHANGELOG.md is already staged with correct content
 CHANGELOG_ALREADY_STAGED=false
-# Track other staged files we temporarily unstage
-OTHER_STAGED_FILES=""
 
 # If committing, check for conflicting staged changes
 if [[ "$SHOULD_COMMIT" == true ]]; then
   # Check if CHANGELOG.md has staged changes
-  if git diff --cached --name-only | grep -q "^${CHANGELOG}$"; then
+  if git diff --cached --name-only | grep -Fxq -- "$CHANGELOG"; then
     # CHANGELOG.md is staged - check if it matches what git cliff would generate
     # We'll verify this after generating the expected content
     CHANGELOG_ALREADY_STAGED=true
   fi
 
   # Temporarily unstage other files so they don't get included in our commit
-  OTHER_STAGED_FILES=$(git diff --cached --name-only | grep -v "^${CHANGELOG}$" || true)
+  OTHER_STAGED_FILES=$(git diff --cached --name-only | grep -Fx -v -- "$CHANGELOG" || true)
   if [[ -n $OTHER_STAGED_FILES ]]; then
     echo "Temporarily unstaging other files..."
     # Create temp directory to store staged diffs for preserving partial staging
