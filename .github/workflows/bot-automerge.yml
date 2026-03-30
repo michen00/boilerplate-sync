@@ -62,11 +62,12 @@ jobs:
           if [ "$ACTOR" = "pre-commit-ci[bot]" ]; then
             echo "level=info" >> "$GITHUB_OUTPUT"
           elif [ "$ACTOR" = "dependabot[bot]" ]; then
-            if [ "$DEPENDENCY_TYPE" = "direct:development" ]; then
-              echo "level=notice" >> "$GITHUB_OUTPUT"
-            else
-              # direct:production or other non-dev dependencies
+            if [ "$DEPENDENCY_TYPE" = "direct:production" ]; then
+              # Keep production dependency updates strict: dist changes are expected.
               echo "level=error" >> "$GITHUB_OUTPUT"
+            else
+              # direct:development or indirect updates may not modify dist.
+              echo "level=notice" >> "$GITHUB_OUTPUT"
             fi
           else
             echo "level=warning" >> "$GITHUB_OUTPUT"
