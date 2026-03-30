@@ -59,14 +59,15 @@ jobs:
           ACTOR: ${{ github.actor }}
           DEPENDENCY_TYPE: ${{ steps.dependabot.outputs.dependency-type }}
         run: |
-          if [ "$ACTOR" = "pre-commit-ci[bot]" ]; then
+          if [ "$ACTOR" = "pre-commit-ci[bot]" ] || [[ "$DEPENDENCY_TYPE" == indirect:* ]]; then
             echo "level=info" >> "$GITHUB_OUTPUT"
           elif [ "$ACTOR" = "dependabot[bot]" ]; then
             if [ "$DEPENDENCY_TYPE" = "direct:development" ]; then
               echo "level=notice" >> "$GITHUB_OUTPUT"
-            else
-              # direct:production or other non-dev dependencies
+            elif [ "$DEPENDENCY_TYPE" = "direct:production" ]; then
               echo "level=error" >> "$GITHUB_OUTPUT"
+            else
+              echo "level=warning" >> "$GITHUB_OUTPUT"
             fi
           else
             echo "level=warning" >> "$GITHUB_OUTPUT"
