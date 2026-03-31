@@ -31699,7 +31699,7 @@ class GitHubSource {
     async fetch(token) {
         const octokit = new rest_1.Octokit({ auth: token });
         // Resolve ref if not provided
-        const ref = this.ref ?? await this.getDefaultBranch(octokit);
+        const ref = this.ref ?? (await this.getDefaultBranch(octokit));
         this.resolvedRef = ref;
         try {
             const { data } = await octokit.repos.getContent({
@@ -31805,20 +31805,23 @@ async function getDefaultBranch(owner, repo, token) {
 async function listFilesMatchingGlob(owner, repo, pattern, ref, token) {
     const octokit = new rest_1.Octokit({ auth: token });
     // Resolve ref to default branch if not provided
-    const resolvedRef = ref ?? await getDefaultBranch(owner, repo, token);
+    const resolvedRef = ref ?? (await getDefaultBranch(owner, repo, token));
     // Get the tree SHA for the ref
-    const { data: refData } = await octokit.git.getRef({
+    const { data: refData } = await octokit.git
+        .getRef({
         owner,
         repo,
         ref: `heads/${resolvedRef}`,
-    }).catch(async () => {
+    })
+        .catch(async () => {
         // If not a branch, try as a tag
         return octokit.git.getRef({
             owner,
             repo,
             ref: `tags/${resolvedRef}`,
         });
-    }).catch(async () => {
+    })
+        .catch(async () => {
         // If not a tag, assume it's a commit SHA and get the commit
         const { data: commit } = await octokit.git.getCommit({
             owner,

@@ -1,4 +1,4 @@
-import type { FileSource, FetchResult } from './types';
+import type { FetchResult, FileSource } from './types';
 /**
  * GitHub repository file source
  * Fetches files using the GitHub Contents API
