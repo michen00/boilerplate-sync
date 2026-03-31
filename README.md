@@ -322,11 +322,11 @@ Only update files that already exist:
 3. **Update or Create** - Updates or creates each file in the workspace
 4. **Output Results** - Sets outputs (`has-changes`, counts, summary) for use by subsequent steps
 
-The action writes files directly to the workspace. Use `[peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)` or similar to create a PR from the changes.
+The action writes files directly to the workspace. Use [`peter-evans/create-pull-request`](https://github.com/peter-evans/create-pull-request) or similar to create a PR from the changes.
 
 ## Permissions
 
-When using with `[peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)`, your workflow needs these permissions:
+When using with [`peter-evans/create-pull-request`](https://github.com/peter-evans/create-pull-request), your workflow needs these permissions:
 
 ```yaml
 permissions:
