@@ -111,12 +111,14 @@ export class GitHubSource implements FileSource {
         // Enhance error messages for common cases
         if (error.message.includes('Not Found')) {
           throw new Error(
-            `File not found: ${this.path} in ${this.owner}/${this.repo}@${ref}`
+            `File not found: ${this.path} in ${this.owner}/${this.repo}@${ref}`,
+            { cause: error }
           );
         }
         if (error.message.includes('Bad credentials')) {
           throw new Error(
-            `Authentication failed for ${this.owner}/${this.repo}. Check your token.`
+            `Authentication failed for ${this.owner}/${this.repo}. Check your token.`,
+            { cause: error }
           );
         }
       }
