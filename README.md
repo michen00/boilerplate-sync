@@ -15,7 +15,7 @@ _Note: This action currently cannot sync `.github/workflows/*.y{,a}ml` files wit
 
 ## Inspiration
 
-This project was inspired by `[kbrashears5/github-action-file-sync](https://github.com/kbrashears5/github-action-file-sync)`, which syncs files across repositories using a **push model** — the source repository pushes files to target repositories.
+This project was inspired by [`kbrashears5/github-action-file-sync`](https://github.com/kbrashears5/github-action-file-sync), which syncs files across repositories using a **push model** — the source repository pushes files to target repositories.
 
 **Boilerplate Sync takes the opposite approach with a pull model:**
 
