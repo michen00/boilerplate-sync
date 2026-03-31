@@ -4,8 +4,7 @@
   "description": "GitHub Action to sync project files from boilerplate repositories",
   "main": "dist/index.js",
   "scripts": {
-    "build": "ncc build src/index.ts -o dist --source-map --license licenses.txt && npm run normalize-sourcemaps",
-    "normalize-sourcemaps": "bash scripts/normalize-sourcemaps.sh",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --sourcemap",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src",
@@ -20,7 +19,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^2.0.3",
+    "@actions/core": "^3.0.0",
     "@actions/exec": "^3.0.0",
     "@actions/github": "^9.0.0",
     "@octokit/rest": "^22.0.1",
@@ -32,8 +31,8 @@
     "@types/node": "^25.5.0",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
-    "@vercel/ncc": "^0.38.4",
     "@vitest/coverage-v8": "^4.1.2",
+    "esbuild": "^0.27.4",
     "eslint": "^10.1.0",
     "globals": "^17.4.0",
     "typescript": "^6.0.2",
