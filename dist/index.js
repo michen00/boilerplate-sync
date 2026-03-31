@@ -31730,10 +31730,10 @@ class GitHubSource {
             if (error instanceof Error) {
                 // Enhance error messages for common cases
                 if (error.message.includes('Not Found')) {
-                    throw new Error(`File not found: ${this.path} in ${this.owner}/${this.repo}@${ref}`);
+                    throw new Error(`File not found: ${this.path} in ${this.owner}/${this.repo}@${ref}`, { cause: error });
                 }
                 if (error.message.includes('Bad credentials')) {
-                    throw new Error(`Authentication failed for ${this.owner}/${this.repo}. Check your token.`);
+                    throw new Error(`Authentication failed for ${this.owner}/${this.repo}. Check your token.`, { cause: error });
                 }
             }
             throw error;
