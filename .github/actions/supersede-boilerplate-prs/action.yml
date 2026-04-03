@@ -37,9 +37,13 @@ runs:
 
           const owner = context.repo.owner;
           const repo = context.repo.repo;
-          const { data: repoData } = await github.rest.repos.get({ owner, repo });
-          const defaultBranch = repoData.default_branch;
-          const headPrefix = `${streamPrefix}/`;
+          const { data: successorPr } = await github.rest.pulls.get({
+            owner,
+            repo,
+            pull_number: successor,
+          });
+          const targetBranch = successorPr.base.ref;
+          const headPrefix = streamPrefix.endsWith('/') ? streamPrefix : `${streamPrefix}/`;
 
           const allPulls = [];
           for (let page = 1; page <= 20; page++) {
@@ -59,7 +63,7 @@ runs:
           let closed = 0;
           for (const pr of allPulls) {
             if (pr.number >= successor) continue;
-            if (pr.base.ref !== defaultBranch) continue;
+            if (pr.base.ref !== targetBranch) continue;
             if (!pr.head.ref.startsWith(headPrefix)) continue;
             if (pr.head.repo.full_name !== pr.base.repo.full_name) continue;
 
