@@ -51,6 +51,7 @@ runs:
               owner,
               repo,
               state: 'open',
+              base: targetBranch,
               per_page: 100,
               page,
               sort: 'created',
