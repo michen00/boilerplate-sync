@@ -149,7 +149,7 @@ For each approved fix, **sequentially**:
 2. Run `VERIFY_CMD` (default: `make check`) **before committing**
 3. **On failure:** pause, show the error, and offer:
    - Fix the issue manually and retry verification
-   - Skip this fix (discard changes: `git restore <file>...` for modified files in `plan.files_touched`, plus `git clean -f <file>...` for any new files the fix added)
+   - Skip this fix (discard changes: `git restore <file>...` for modified files in `plan.files_touched`, plus `git clean -fd <file>...` for any new files the fix added)
    - Abort remaining fixes (keep prior commits)
 4. **On success:** create an atomic commit following the conventions from the atomic-commits skill (reference its conventions for message format, signing, and staging only — do NOT invoke the full multi-commit workflow):
    - Signed commit (per project policy in `atomic-commits`)
