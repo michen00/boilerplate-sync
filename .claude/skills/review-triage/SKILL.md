@@ -15,9 +15,10 @@ Triage unresolved PR review comments from any reviewer through an interactive pi
 | `RE_REQUEST`             | `true`                          | If `false`, skip re-request at the end of the pipeline                                                             |
 | `BOT_LOGINS`             | `copilot-pull-request-reviewer` | Known bot logins (for `--bots` filter)                                                                             |
 | `COPILOT_THREAD_AUTHORS` | `copilot-pull-request-reviewer` | Thread `author.login` values for Copilot code review in Step 8 (not the same string as REST `requested_reviewers`) |
+| `GEMINI_THREAD_AUTHORS`  | `gemini-code-assist`            | Thread `author.login` values for Gemini Code Assist in Step 8; REST uses `gemini-code-assist[bot]`                 |
 | `AUTO_TRIAGE_TAG`        | `[Auto-triage]`                 | Prefix to detect gh-aw pre-triage replies (synced with `.github/workflows/review-triage.md` — update both)         |
 
-**Thread author vs review request:** GraphQL review-comment `author.login` identifies who started the thread; it is **not** always valid for [`POST .../pulls/{pull_number}/requested_reviewers`](https://docs.github.com/en/rest/pulls/review-requests). Copilot threads use `copilot-pull-request-reviewer`, but re-requesting Copilot uses **`gh pr edit ... --add-reviewer '@copilot'`** (or REST `copilot-pull-request-reviewer[bot]`). Extend the same pattern for other bots later: map thread `author` to a documented CLI or REST reviewer identity—**never** pass thread authors blindly into `reviewers[]`.
+**Thread author vs review request:** GraphQL review-comment `author.login` identifies who started the thread; it is **not** always valid for [`POST .../pulls/{pull_number}/requested_reviewers`](https://docs.github.com/en/rest/pulls/review-requests). Copilot threads use `copilot-pull-request-reviewer`, but re-requesting Copilot uses **`gh pr edit ... --add-reviewer '@copilot'`** (or REST `copilot-pull-request-reviewer[bot]`). Gemini threads use `gemini-code-assist`; re-request via REST **`gemini-code-assist[bot]`** (there is no documented `gh pr edit` alias like `@copilot`). For any other bot, map thread `author` to a documented CLI or REST reviewer identity—**never** pass thread authors blindly into `reviewers[]`.
 
 ## Inputs
 
@@ -260,11 +261,25 @@ gh api --method POST \
 
 Do **not** use bare `copilot-pull-request-reviewer` in `reviewers[]`.
 
-**3. Other bots** (e.g. `github-actions`, or any bot not covered above): **skip** re-request for that author and log that the login is not a requestable code-review identity. Do not POST to `requested_reviewers` with those logins (422).
+**3. Gemini Code Assist** (thread `author.login` is listed in `GEMINI_THREAD_AUTHORS`; default is `gemini-code-assist`):
 
-**Extensibility:** Add another bot by documenting a mapping from thread `author` to a CLI alias or REST `reviewers[]` login (often `name[bot]`), following the Copilot pattern—never pass thread `author` alone without verification.
+Do **not** pass that string to `reviewers[]` bare — GitHub may return **422** (“not a collaborator”). There is no documented `gh pr edit --add-reviewer '@gemini'` equivalent (unlike Copilot). Use REST:
 
-**Errors:** Log failures. For Copilot, try the **`[bot]`** REST fallback above before giving up. Do **not** “fall back” to `gh pr edit --add-reviewer` with the **thread author** string for Copilot—that repeats the bug.
+```bash
+gh api --method POST \
+  "/repos/$OWNER/$REPO/pulls/$PR_NUMBER/requested_reviewers" \
+  -f 'reviewers[]=gemini-code-assist[bot]'
+```
+
+If the POST returns **422**, confirm the reviewer slug with `GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers` on a pull request where Gemini Code Assist has already reviewed. As a **human** fallback, contributors can post `/gemini review` on the PR conversation.
+
+Do **not** use bare `gemini-code-assist` in `reviewers[]`.
+
+**4. Other bots** (e.g. `github-actions`, or any bot not covered above): **skip** re-request for that author and log that the login is not a requestable code-review identity. Do not POST to `requested_reviewers` with those logins (422).
+
+**Extensibility:** Copilot and Gemini are documented above. For any other bot, add a mapping from thread `author` to a CLI alias or REST `reviewers[]` login (often `name[bot]`), following the same pattern—never pass thread `author` alone without verification.
+
+**Errors:** Log failures. For Copilot, try the **`[bot]`** REST fallback above before giving up. For Gemini, verify the `gemini-code-assist[bot]` slug if POST fails. Do **not** “fall back” to `gh pr edit --add-reviewer` with the **thread author** string for Copilot or Gemini—that repeats the bug.
 
 **Team reviewers:** use `team_reviewers[]` instead of `reviewers[]`. (v1: individual reviewers only.)
 
