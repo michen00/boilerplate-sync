@@ -4,6 +4,23 @@ set -euo pipefail # Exit on errors, unbound vars, and failed pipelines
 
 SCRIPT_NAME=$(basename "$0")
 
+# Track mktemp paths so INTERRUPT/ERR can remove leftovers (trap EXIT).
+_TMP_FILES=()
+mktemp_track() {
+  local t
+  t=$(mktemp)
+  _TMP_FILES+=("$t")
+  echo "$t"
+}
+
+_cleanup_mktemp() {
+  local f
+  for f in "${_TMP_FILES[@]}"; do
+    rm -f "$f"
+  done
+}
+trap _cleanup_mktemp EXIT
+
 usage() {
   cat << EOF
 Usage: $SCRIPT_NAME [--output <output_file>] [<input_file>]
@@ -14,9 +31,9 @@ stdin, a file, or built-in defaults.
 Inputs:
   stdin            Read URLs from standard input when piped or redirected.
   <input_file>     Optional file containing one URL per line. Supports section headers
-                   with lines starting "## ". A single argument ending with /.gitignore
-                   (e.g. my-project/.gitignore) is treated as the output path (relative
-                   to repo root) and default URLs are used.
+                   with lines starting "## ". A single argument of .gitignore or
+                   path/to/.gitignore is treated as the output path (relative to repo
+                   root) and default URLs are used.
 
 Options:
   --output <file>  Destination file name. Defaults to .gitignore.
@@ -124,10 +141,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# If the only positional argument looks like an output path (e.g. my-project/.gitignore),
-# treat it as --output and use default URLs. Resolve relative to repo root (parent of
-# script dir) so the same path is used regardless of current working directory.
-if [[ -n $INPUT_FILE && $INPUT_FILE == */.gitignore ]]; then
+# If the only positional argument looks like an output path (e.g. .gitignore or
+# my-project/.gitignore), treat it as --output and use default URLs. Resolve relative
+# to repo root (parent of script dir) so the same path is used regardless of cwd.
+if [[ -n $INPUT_FILE && ($INPUT_FILE == .gitignore || $INPUT_FILE == */.gitignore) ]]; then
   SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
   REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
   OUTPUT_FILE="$REPO_ROOT/$INPUT_FILE"
@@ -231,23 +248,20 @@ for url in "${URLS[@]}"; do
     echo ""
   } >> "$OUTPUT_FILE"
 
-  # Fetch content (curl -f: fail on HTTP 4xx/5xx)
-  TMP_CURL=$(mktemp)
+  # Fetch content (curl -f: fail on HTTP 4xx/5xx); stream to output to avoid huge vars
+  TMP_CURL=$(mktemp_track)
   if ! curl -f -s "$RAW_URL" -o "$TMP_CURL"; then
-    rm -f "$TMP_CURL"
     echo "Failed to fetch: $RAW_URL" >&2
     exit 1
   fi
-  CONTENT=$(awk '{ gsub(/\r$/, ""); gsub(/[ \t]+$/, ""); print }' "$TMP_CURL")
-  rm -f "$TMP_CURL"
 
-  if [[ -z "$CONTENT" ]]; then
+  if [[ ! -s "$TMP_CURL" ]]; then
     echo "Empty content from: $RAW_URL" >&2
     exit 1
   fi
 
-  # Reject HTML (e.g. GitHub error page)
-  content_prefix="${CONTENT:0:256}"
+  # Reject HTML (e.g. GitHub error page) using a small prefix read
+  content_prefix=$(head -c 256 "$TMP_CURL" | tr -d '\0')
   if [[ "$content_prefix" =~ ^[[:space:]]*\<\![[:space:]]*[Dd][Oo][Cc][Tt][Yy][Pp][Ee] ]] ||
     [[ "$content_prefix" =~ ^[[:space:]]*\<[Hh][Tt][Mm][Ll] ]]; then
     echo "Received HTML instead of gitignore content from: $RAW_URL" >&2
@@ -255,25 +269,30 @@ for url in "${URLS[@]}"; do
   fi
 
   echo "Appending content from: $RAW_URL"
-  printf '%s\n' "$CONTENT" >> "$OUTPUT_FILE"
+  awk '{ gsub(/\r$/, ""); gsub(/[ \t]+$/, ""); print }' "$TMP_CURL" >> "$OUTPUT_FILE"
+  rm -f "$TMP_CURL"
   printf '\n# End of %s\n\n' "$url" >> "$OUTPUT_FILE"
 done
 
 # Normalize line endings in the final output file
-NORMALIZE_TMP=$(mktemp)
-tr -d '\r' < "$OUTPUT_FILE" > "$NORMALIZE_TMP" || {
-  rm -f "$NORMALIZE_TMP"
-  exit 1
-}
+NORMALIZE_TMP=$(mktemp_track)
+tr -d '\r' < "$OUTPUT_FILE" > "$NORMALIZE_TMP" || exit 1
 mv "$NORMALIZE_TMP" "$OUTPUT_FILE"
 
 # Ensure single trailing newline (collapse any trailing blank lines into exactly one newline)
 if command -v perl > /dev/null 2>&1; then
   perl -0777 -pi -e 's/\n*\z/\n/' "$OUTPUT_FILE"
+elif command -v python3 > /dev/null 2>&1; then
+  python3 -c '
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+data = p.read_text()
+p.write_text(data.rstrip("\r\n") + "\n")
+' "$OUTPUT_FILE"
+elif [[ "$(uname -s)" == Darwin ]]; then
+  sed -i '' -e :a -e '/^\n*$/{$d;N;ba;}' "$OUTPUT_FILE" # spellchecker:disable-line
 else
-  # Command substitution strips trailing newlines; print one newline back.
-  content=$(< "$OUTPUT_FILE")
-  printf '%s\n' "$content" > "$OUTPUT_FILE"
+  sed -i ':a;/^\n*$/{$d;N;ba;}' "$OUTPUT_FILE" # spellchecker:disable-line
 fi
 
 # Add additional ignore patterns
@@ -306,6 +325,11 @@ cat >> "$OUTPUT_FILE" << EOF
 
 # Directory for temporary files marked for deletion
 .delete-me/
+
+# Track dist/ for GitHub Actions (ncc bundle; committed in this repo). Templates may
+# include dist rules above; these negations win when listed after those blocks.
+!dist/
+!dist/**
 
 !.gitkeep
 EOF

@@ -1141,4 +1141,9 @@ Backup of *.doc*
 # Directory for temporary files marked for deletion
 .delete-me/
 
+# Track dist/ for GitHub Actions (ncc bundle; committed in this repo). Templates may
+# include `dist` rules above; these negations win when listed after those blocks.
+!dist/
+!dist/**
+
 !.gitkeep
