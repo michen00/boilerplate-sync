@@ -263,7 +263,15 @@ Do **not** use bare `copilot-pull-request-reviewer` in `reviewers[]`.
 
 **3. Gemini Code Assist** (thread `author.login` is listed in `GEMINI_THREAD_AUTHORS`; default is `gemini-code-assist`):
 
-Do **not** pass that string to `reviewers[]` bare — GitHub may return **422** (“not a collaborator”). There is no documented `gh pr edit --add-reviewer '@gemini'` equivalent (unlike Copilot). Use REST:
+Prefer posting the **`/gemini review`** slash command on the **PR conversation** — this is how Gemini Code Assist is typically re-triggered, and it avoids **422** from `requested_reviewers` when the bot is not a normal collaborator reviewer:
+
+```bash
+gh pr comment "$PR_NUMBER" --repo "$OWNER/$REPO" --body '/gemini review'
+```
+
+Do **not** pass bare `gemini-code-assist` to `reviewers[]`.
+
+**Fallback** (headless automation or if the slash command does not trigger a run): REST:
 
 ```bash
 gh api --method POST \
@@ -271,15 +279,13 @@ gh api --method POST \
   -f 'reviewers[]=gemini-code-assist[bot]'
 ```
 
-If the POST returns **422**, confirm the reviewer slug with `GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers` on a pull request where Gemini Code Assist has already reviewed. As a **human** fallback, contributors can post `/gemini review` on the PR conversation.
-
-Do **not** use bare `gemini-code-assist` in `reviewers[]`.
+If the POST returns **422**, confirm the reviewer slug with `GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers` on a pull request where Gemini Code Assist has already reviewed, and rely on **`/gemini review`** above if REST stays broken.
 
 **4. Other bots** (e.g. `github-actions`, or any bot not covered above): **skip** re-request for that author and log that the login is not a requestable code-review identity. Do not POST to `requested_reviewers` with those logins (422).
 
 **Extensibility:** Copilot and Gemini are documented above. For any other bot, add a mapping from thread `author` to a CLI alias or REST `reviewers[]` login (often `name[bot]`), following the same pattern—never pass thread `author` alone without verification.
 
-**Errors:** Log failures. For Copilot, try the **`[bot]`** REST fallback above before giving up. For Gemini, verify the `gemini-code-assist[bot]` slug if POST fails. Do **not** “fall back” to `gh pr edit --add-reviewer` with the **thread author** string for Copilot or Gemini—that repeats the bug.
+**Errors:** Log failures. For Copilot, try the **`[bot]`** REST fallback above before giving up. For Gemini, prefer **`gh pr comment` … `/gemini review`** if REST fails or returns **422**; only then retry or verify the `gemini-code-assist[bot]` slug. Do **not** “fall back” to `gh pr edit --add-reviewer` with the **thread author** string for Copilot or Gemini—that repeats the bug.
 
 **Team reviewers:** use `team_reviewers[]` instead of `reviewers[]`. (v1: individual reviewers only.)
 
