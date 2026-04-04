@@ -45,21 +45,15 @@ runs:
           const targetBranch = successorPr.base.ref;
           const headPrefix = streamPrefix.endsWith('/') ? streamPrefix : `${streamPrefix}/`;
 
-          const allPulls = [];
-          for (let page = 1; page <= 20; page++) {
-            const { data } = await github.rest.pulls.list({
-              owner,
-              repo,
-              state: 'open',
-              base: targetBranch,
-              per_page: 100,
-              page,
-              sort: 'created',
-              direction: 'desc',
-            });
-            allPulls.push(...data);
-            if (data.length < 100) break;
-          }
+          const allPulls = await github.paginate(github.rest.pulls.list, {
+            owner,
+            repo,
+            state: 'open',
+            base: targetBranch,
+            per_page: 100,
+            sort: 'created',
+            direction: 'desc',
+          });
 
           let closed = 0;
           for (const pr of allPulls) {
