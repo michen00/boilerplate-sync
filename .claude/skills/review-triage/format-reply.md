@@ -118,15 +118,17 @@ For human-authored threads, post the reply and leave the thread open.
 For bot-authored threads that should be resolved, run:
 
 ```bash
-gh api graphql -f query='
-  mutation($threadId: ID!) {
-    resolveReviewThread(input: {
-      threadId: $threadId
-    }) {
-      thread { isResolved }
+gh api graphql \
+  -f query='
+    mutation($threadId: ID!) {
+      resolveReviewThread(input: {
+        threadId: $threadId
+      }) {
+        thread { isResolved }
+      }
     }
-  }
-'  -f threadId="$THREAD_ID"
+  ' \
+  -f threadId="$THREAD_ID"
 ```
 
 **Exceptions:** Do NOT resolve threads classified as `needs-discussion`, and do NOT resolve any human-authored thread.
