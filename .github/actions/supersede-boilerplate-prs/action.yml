@@ -1,0 +1,91 @@
+---
+name: Supersede older boilerplate PRs
+description: >
+  Close older open pull requests in the same boilerplate sync stream after a new PR is created.
+  Stream is identified by head branch prefix (see workflows). Comments before close.
+
+inputs:
+  stream-prefix:
+    description: >
+      Head branch prefix for this stream only (e.g. chore/sync-boilerplate or
+      chore/sync-boilerplate-workflows).
+    required: true
+  successor-pr-number:
+    description: The new PR number that supersedes older open PRs in this stream.
+    required: true
+  token:
+    description: GitHub token with pull-requests write for the repository.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Close older PRs in same stream
+      uses: actions/github-script@v8
+      env:
+        STREAM_PREFIX: ${{ inputs.stream-prefix }}
+        SUCCESSOR_PR_NUMBER: ${{ inputs.successor-pr-number }}
+      with:
+        github-token: ${{ inputs.token }}
+        script: |
+          const streamPrefix = process.env.STREAM_PREFIX;
+          const successor = parseInt(process.env.SUCCESSOR_PR_NUMBER, 10);
+          if (!streamPrefix || Number.isNaN(successor) || successor < 1) {
+            core.setFailed('Invalid STREAM_PREFIX or SUCCESSOR_PR_NUMBER');
+            return;
+          }
+
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          const { data: successorPr } = await github.rest.pulls.get({
+            owner,
+            repo,
+            pull_number: successor,
+          });
+          const targetBranch = successorPr.base.ref;
+          const headPrefix = `${streamPrefix.replace(/\/+$/, '')}/`;
+
+          const allPulls = await github.paginate(github.rest.pulls.list, {
+            owner,
+            repo,
+            state: 'open',
+            base: targetBranch,
+            per_page: 100,
+            sort: 'created',
+            direction: 'desc',
+          });
+
+          let closed = 0;
+          for (const pr of allPulls) {
+            if (pr.number >= successor) continue;
+            if (pr.base.ref !== targetBranch) continue;
+            if (!pr.head.ref.startsWith(headPrefix)) continue;
+            if (!pr.head.repo || pr.head.repo.full_name !== pr.base.repo.full_name) continue;
+
+            const body = [
+              'This pull request was **superseded** by boilerplate sync automation.',
+              `Please use **#${successor}** instead.`,
+              '',
+              '---',
+              '*This PR was closed because a replacement PR was opened in the same stream.*',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pr.number,
+              body,
+            });
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number: pr.number,
+              state: 'closed',
+            });
+            closed++;
+            core.info(`Superseded PR #${pr.number} -> #${successor}`);
+          }
+
+          core.info(
+            `Boilerplate supersession: closed ${closed} older PR(s) for stream ${streamPrefix}`
+          );
