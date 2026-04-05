@@ -290,7 +290,7 @@ data = p.read_text()
 p.write_text(data.rstrip("\r\n") + "\n")
 ' "$OUTPUT_FILE"
 elif [[ "$(uname -s)" == Darwin ]]; then
-  sed -i '' -e :a -e '/^\n*$/{$d;N;ba;}' "$OUTPUT_FILE" # spellchecker:disable-line
+  sed -i '' -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$OUTPUT_FILE" # spellchecker:disable-line
 else
   sed -i ':a;/^\n*$/{$d;N;ba;}' "$OUTPUT_FILE" # spellchecker:disable-line
 fi
