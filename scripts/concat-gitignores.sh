@@ -200,7 +200,7 @@ fi
 
 {
   echo "$HEADER"
-  echo "# This .gitignore is composed of the following templates (retrieved $(date +%Y-%m-%d)):"
+  echo "# This .gitignore is composed of the following templates:"
   for entry in "${ENTRIES[@]}"; do
     if [[ "$entry" == "## "* ]]; then
       echo "# ${entry#\#\# }"
