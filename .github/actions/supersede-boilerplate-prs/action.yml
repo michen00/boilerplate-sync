@@ -43,7 +43,7 @@ runs:
             pull_number: successor,
           });
           const targetBranch = successorPr.base.ref;
-          const headPrefix = streamPrefix.endsWith('/') ? streamPrefix : `${streamPrefix}/`;
+          const headPrefix = `${streamPrefix.replace(/\/+$/, '')}/`;
 
           const allPulls = await github.paginate(github.rest.pulls.list, {
             owner,
