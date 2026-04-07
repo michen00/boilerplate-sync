@@ -32148,6 +32148,9 @@ var GitHubSource = class {
     this.owner = owner;
     this.repo = repo;
   }
+  source;
+  path;
+  ref;
   type = "github";
   owner;
   repo;
