@@ -262,8 +262,11 @@ for url in "${URLS[@]}"; do
 
   # Reject HTML (e.g. GitHub error page) using a small prefix read
   content_prefix=$(head -c 256 "$TMP_CURL" | tr -d '\0')
-  if [[ "$content_prefix" =~ ^[[:space:]]*\<\![[:space:]]*[Dd][Oo][Cc][Tt][Yy][Pp][Ee] ]] ||
-    [[ "$content_prefix" =~ ^[[:space:]]*\<[Hh][Tt][Mm][Ll] ]]; then
+  # Patterns use literal '<' / '<!'; store in vars so [[ =~ ]] does not parse '<' as redirection
+  _html_doctype_re='^[[:space:]]*<![[:space:]]*[Dd][Oo][Cc][Tt][Yy][Pp][Ee]'
+  _html_root_re='^[[:space:]]*<[Hh][Tt][Mm][Ll]'
+  if [[ "$content_prefix" =~ $_html_doctype_re ]] ||
+    [[ "$content_prefix" =~ $_html_root_re ]]; then
     echo "Received HTML instead of gitignore content from: $RAW_URL" >&2
     exit 1
   fi
