@@ -1,4 +1,5 @@
 ---
+# Reserved head branch prefix: chore/sync-boilerplate/<run_id> (automation only; supersession targets this stream).
 name: Sync boilerplate files (non-workflow)
 
 on:
@@ -154,6 +155,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
           delete-branch: true
+      - name: Supersede older boilerplate PRs
+        if: steps.create-pr.outputs.pull-request-number != ''
+        uses: ./.github/actions/supersede-boilerplate-prs
+        with:
+          stream-prefix: chore/sync-boilerplate
+          successor-pr-number: ${{ steps.create-pr.outputs.pull-request-number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Trigger required checks
         if: steps.create-pr.outputs.pull-request-number != ''
         env:
