@@ -98,7 +98,7 @@ jobs:
       - name: Build PR body
         if: steps.sync.outputs.has-changes == 'true'
         id: pr-body
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           result-encoding: string
           script: |
