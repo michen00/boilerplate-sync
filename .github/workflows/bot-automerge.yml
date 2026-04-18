@@ -65,7 +65,7 @@ jobs:
             if [ "$DEPENDENCY_TYPE" = "direct:development" ]; then
               echo "level=notice" >> "$GITHUB_OUTPUT"
             elif [ "$DEPENDENCY_TYPE" = "direct:production" ]; then
-              echo "level=error" >> "$GITHUB_OUTPUT"
+              echo "level=warning" >> "$GITHUB_OUTPUT"
             else
               echo "level=warning" >> "$GITHUB_OUTPUT"
             fi
