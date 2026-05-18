@@ -22,7 +22,7 @@ exclude: dist
 repos:
   # maintenance
   - repo: https://github.com/pre-commit/sync-pre-commit-deps
-    rev: v0.0.3
+    rev: v0.0.4
     hooks:
       - id: sync-pre-commit-deps
 
@@ -101,7 +101,7 @@ repos:
       - id: yamllint
         args: [--strict]
   - repo: https://github.com/adhtruong/mirrors-typos
-    rev: v1.46.1
+    rev: v1.46.2
     hooks:
       - id: typos
   - repo: https://github.com/codespell-project/codespell
