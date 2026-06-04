@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as core from '@actions/core';
-import { isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
+import { createGitHubSource, isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
 import { syncFiles } from '../src/sync';
 import type { ActionInputs } from '../src/sources/types';
 
@@ -195,7 +195,6 @@ describe('syncFiles', () => {
   });
 
   it('stops processing on first failure when fail-on-error is true', async () => {
-    const { createGitHubSource } = await import('../src/sources/github');
 
     vi.mocked(createGitHubSource).mockImplementationOnce(() => ({
       toString: () => 'owner/repo@main:failing.ts',
@@ -225,7 +224,6 @@ describe('syncFiles', () => {
   });
 
   it('sets allFailed flag when all files fail', async () => {
-    const { createGitHubSource } = await import('../src/sources/github');
 
     vi.mocked(createGitHubSource).mockImplementation(() => ({
       toString: () => 'owner/repo@main:failing.ts',
@@ -244,7 +242,6 @@ describe('syncFiles', () => {
   });
 
   it('uses per-source token when provided', async () => {
-    const { createGitHubSource } = await import('../src/sources/github');
     const mockFetch = vi.fn(async () => ({
       content: 'mock content',
       resolvedRef: 'main',
@@ -281,7 +278,6 @@ describe('syncFiles', () => {
   });
 
   it('falls back to github-token when no source-token is provided', async () => {
-    const { createGitHubSource } = await import('../src/sources/github');
     const mockFetch = vi.fn(async () => ({
       content: 'mock content',
       resolvedRef: 'main',
