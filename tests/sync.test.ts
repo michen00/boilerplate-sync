@@ -17,15 +17,24 @@ vi.mock('@actions/core', () => ({
   endGroup: vi.fn(),
 }));
 
-// Mock the GitHub source
-vi.mock('../src/sources/github', () => ({
-  createGitHubSource: vi.fn(() => ({
+// Shared default for the createGitHubSource mock; vi.hoisted makes it
+// visible to the hoisted vi.mock factory and to suite hooks that restore it.
+const { makeDefaultGitHubSource } = vi.hoisted(() => ({
+  makeDefaultGitHubSource: () => ({
     toString: () => 'owner/repo@main:path/file.ts',
     fetch: vi.fn(async () => ({
       content: 'mock content',
       resolvedRef: 'main',
     })),
-  })),
+    type: 'github' as const,
+    getSourceId: () => 'owner/repo',
+    getRef: () => 'main',
+  }),
+}));
+
+// Mock the GitHub source
+vi.mock('../src/sources/github', () => ({
+  createGitHubSource: vi.fn(makeDefaultGitHubSource),
   isGlobPattern: vi.fn(() => false), // Default to not a glob pattern
   listFilesMatchingGlob: vi.fn(async () => []),
 }));
@@ -315,22 +324,14 @@ describe('syncFiles glob expansion', () => {
     vi.mocked(isGlobPattern).mockImplementation((pattern: string) => pattern.includes('*'));
     // clearAllMocks keeps implementations; earlier suites override
     // createGitHubSource, so pin the default shape for isolation.
-    vi.mocked(createGitHubSource).mockImplementation(() => ({
-      toString: () => 'owner/repo@main:path/file.ts',
-      fetch: vi.fn(async () => ({
-        content: 'mock content',
-        resolvedRef: 'main',
-      })),
-      type: 'github',
-      getSourceId: () => 'owner/repo',
-      getRef: () => 'main',
-    }));
+    vi.mocked(createGitHubSource).mockImplementation(makeDefaultGitHubSource);
   });
 
   afterEach(() => {
     // Restore the module-level defaults so ordering cannot leak into other suites
     vi.mocked(isGlobPattern).mockImplementation(() => false);
     vi.mocked(listFilesMatchingGlob).mockImplementation(async () => []);
+    vi.mocked(createGitHubSource).mockImplementation(makeDefaultGitHubSource);
   });
 
   it('fans out a glob pattern into one sync per matched file', async () => {
