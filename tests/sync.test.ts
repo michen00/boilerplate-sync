@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs/promises';
+import * as core from '@actions/core';
+import { isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
 import { syncFiles } from '../src/sync';
 import type { ActionInputs } from '../src/sources/types';
 
@@ -308,21 +310,18 @@ describe('syncFiles glob expansion', () => {
     failOnError: false,
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-    const { isGlobPattern } = await import('../src/sources/github');
     vi.mocked(isGlobPattern).mockImplementation((pattern: string) => pattern.includes('*'));
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     // Restore the module-level defaults so ordering cannot leak into other suites
-    const { isGlobPattern, listFilesMatchingGlob } = await import('../src/sources/github');
     vi.mocked(isGlobPattern).mockImplementation(() => false);
     vi.mocked(listFilesMatchingGlob).mockImplementation(async () => []);
   });
 
   it('fans out a glob pattern into one sync per matched file', async () => {
-    const { listFilesMatchingGlob } = await import('../src/sources/github');
     vi.mocked(listFilesMatchingGlob).mockResolvedValue([
       '.github/workflows/ci.yml',
       '.github/dependabot.yml',
@@ -351,8 +350,6 @@ describe('syncFiles glob expansion', () => {
   });
 
   it('keeps the original pattern config when nothing matches', async () => {
-    const core = await import('@actions/core');
-
     vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
     vi.mocked(fs.mkdir).mockResolvedValue(undefined);
     vi.mocked(fs.writeFile).mockResolvedValue(undefined);
@@ -367,8 +364,6 @@ describe('syncFiles glob expansion', () => {
   });
 
   it('keeps the original pattern config when expansion fails', async () => {
-    const core = await import('@actions/core');
-    const { listFilesMatchingGlob } = await import('../src/sources/github');
     vi.mocked(listFilesMatchingGlob).mockRejectedValue(new Error('tree API unavailable'));
 
     vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
