@@ -1,7 +1,7 @@
 ---
 name: Boilerplate Sync
 description: Sync project files from boilerplate repositories
-author: Your Name
+author: Michael Chen
 
 branding:
   icon: refresh-cw
@@ -45,5 +45,5 @@ outputs:
     description: JSON summary of all sync operations
 
 runs:
-  using: node20
+  using: node24
   main: dist/index.js

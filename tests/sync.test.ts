@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import { syncFiles } from '../src/sync';
 import type { ActionInputs } from '../src/sources/types';
@@ -291,5 +291,95 @@ describe('syncFiles', () => {
 
     // The fetch should be called with the github-token as fallback
     expect(mockFetch).toHaveBeenCalledWith('gh-token');
+  });
+});
+
+describe('syncFiles glob expansion', () => {
+  const globInputs: ActionInputs = {
+    sources: [
+      {
+        source: 'owner/repo',
+        ref: 'main',
+        default_files: ['.github/**'],
+      },
+    ],
+    githubToken: 'gh-token',
+    createMissing: true,
+    failOnError: false,
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const { isGlobPattern } = await import('../src/sources/github');
+    vi.mocked(isGlobPattern).mockImplementation((pattern: string) => pattern.includes('*'));
+  });
+
+  afterEach(async () => {
+    // Restore the module-level defaults so ordering cannot leak into other suites
+    const { isGlobPattern, listFilesMatchingGlob } = await import('../src/sources/github');
+    vi.mocked(isGlobPattern).mockImplementation(() => false);
+    vi.mocked(listFilesMatchingGlob).mockImplementation(async () => []);
+  });
+
+  it('fans out a glob pattern into one sync per matched file', async () => {
+    const { listFilesMatchingGlob } = await import('../src/sources/github');
+    vi.mocked(listFilesMatchingGlob).mockResolvedValue([
+      '.github/workflows/ci.yml',
+      '.github/dependabot.yml',
+    ]);
+
+    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const summary = await syncFiles(globInputs);
+
+    // Pattern resolved through the Tree API with the per-source ref and token fallback
+    expect(listFilesMatchingGlob).toHaveBeenCalledWith(
+      'owner',
+      'repo',
+      '.github/**',
+      'main',
+      'gh-token'
+    );
+    // One concrete config per match, with local_path mirroring source_path
+    expect(summary.total).toBe(2);
+    expect(summary.created.map(r => r.config.local_path)).toEqual([
+      '.github/workflows/ci.yml',
+      '.github/dependabot.yml',
+    ]);
+  });
+
+  it('keeps the original pattern config when nothing matches', async () => {
+    const core = await import('@actions/core');
+
+    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const summary = await syncFiles(globInputs);
+
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('No files matched pattern')
+    );
+    // The unexpanded config still flows through sync so the miss is visible
+    expect(summary.total).toBe(1);
+  });
+
+  it('keeps the original pattern config when expansion fails', async () => {
+    const core = await import('@actions/core');
+    const { listFilesMatchingGlob } = await import('../src/sources/github');
+    vi.mocked(listFilesMatchingGlob).mockRejectedValue(new Error('tree API unavailable'));
+
+    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const summary = await syncFiles(globInputs);
+
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to expand glob pattern')
+    );
+    expect(summary.total).toBe(1);
   });
 });
