@@ -22,7 +22,7 @@ exclude: dist
 repos:
   # maintenance
   - repo: https://github.com/pre-commit/sync-pre-commit-deps
-    rev: v0.0.3
+    rev: v0.0.4
     hooks:
       - id: sync-pre-commit-deps
 
@@ -74,12 +74,12 @@ repos:
     hooks:
       - id: trailing-whitespace
   - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.8.1
+    rev: v3.8.3
     hooks:
       - id: prettier
         types_or: [yaml, markdown, html, css, scss, javascript, json]
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.13.0-1
+    rev: v3.13.1-1
     hooks:
       - id: shfmt
   - repo: https://github.com/igorshubovych/markdownlint-cli
@@ -101,7 +101,7 @@ repos:
       - id: yamllint
         args: [--strict]
   - repo: https://github.com/adhtruong/mirrors-typos
-    rev: v1.45.0
+    rev: v1.47.0
     hooks:
       - id: typos
   - repo: https://github.com/codespell-project/codespell
@@ -119,7 +119,7 @@ repos:
 
   # configuration validation
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.37.1
+    rev: 0.37.2
     hooks:
       - id: check-dependabot
       - id: check-github-workflows
