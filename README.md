@@ -13,6 +13,8 @@ A GitHub Action that keeps your project boilerplate files in sync with another r
 
 _Note: This action currently cannot sync `.github/workflows/*.y{,a}ml` files without additional permissions ([e.g.](https://github.com/actions/create-github-app-token)) and configuration (see [discussion](https://github.com/orgs/community/discussions/35410))._
 
+In **this repository**, scheduled boilerplate sync workflows use reserved head branch prefixes—`chore/sync-boilerplate/<run_id>` for non-workflow files and `chore/sync-boilerplate-workflows/<run_id>` for workflow copies—so automation can supersede older open PRs in the same stream. Do not use those prefixes for manual branches.
+
 ## Inspiration
 
 This project was inspired by [`kbrashears5/github-action-file-sync`](https://github.com/kbrashears5/github-action-file-sync), which syncs files across repositories using a **push model** — the source repository pushes files to target repositories.

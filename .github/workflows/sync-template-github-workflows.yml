@@ -1,4 +1,5 @@
 ---
+# Reserved head branch prefix: chore/sync-boilerplate-workflows/<run_id> (automation only; supersession targets this stream).
 name: Sync boilerplate files (GitHub workflows)
 
 on:
@@ -19,7 +20,7 @@ jobs:
     name: Sync boilerplate files
     runs-on: ubuntu-latest
     env:
-      BRANCH_NAME: chore/sync-boilerplate/${{ github.run_id }}
+      BRANCH_NAME: chore/sync-boilerplate-workflows/${{ github.run_id }}
       COMMIT_MESSAGE: 'chore: auto-sync boilerplate files'
     steps:
       - uses: actions/checkout@v6
@@ -128,6 +129,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
           delete-branch: true
+      - name: Supersede older boilerplate PRs
+        if: steps.create-pr.outputs.pull-request-number != ''
+        uses: ./.github/actions/supersede-boilerplate-prs
+        with:
+          stream-prefix: chore/sync-boilerplate-workflows
+          successor-pr-number: ${{ steps.create-pr.outputs.pull-request-number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Trigger required checks
         if: steps.create-pr.outputs.pull-request-number != ''
         env:
