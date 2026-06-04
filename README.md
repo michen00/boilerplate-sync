@@ -338,6 +338,16 @@ permissions:
 
 If using a custom `source-token` for private source repositories, ensure the token has `repo` scope.
 
+## Security
+
+Release tags (`v*`) are signed and protected by a tag ruleset; only the repository owner can create, move, or delete them. The `v1` alias is movable by design (it tracks the latest `v1.x` release), so pin the action to a full commit SHA if your threat model includes compromise of this repository:
+
+```yaml
+- uses: michen00/boilerplate-sync@448458ef54cd69b79dd5be45e1b516f9a138052d # v1.0.0
+```
+
+Report vulnerabilities privately via [GitHub security advisories](https://github.com/michen00/boilerplate-sync/security/advisories/new) — see [SECURITY.md](SECURITY.md). This is a personal project maintained on a best-effort basis.
+
 ## Limitations
 
 - Only supports GitHub repositories as sources (other sources are planned for future versions depending on user interest)
