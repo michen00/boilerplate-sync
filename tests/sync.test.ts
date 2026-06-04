@@ -18,7 +18,8 @@ vi.mock('@actions/core', () => ({
 }));
 
 // Shared default for the createGitHubSource mock; vi.hoisted makes it
-// visible to the hoisted vi.mock factory and to suite hooks that restore it.
+// visible to the hoisted vi.mock factory, and resetAllMocks in the suite
+// hooks restores mocks to this factory default between tests.
 const { makeDefaultGitHubSource } = vi.hoisted(() => ({
   makeDefaultGitHubSource: () => ({
     toString: () => 'owner/repo@main:path/file.ts',
@@ -195,7 +196,6 @@ describe('syncFiles', () => {
   });
 
   it('stops processing on first failure when fail-on-error is true', async () => {
-
     vi.mocked(createGitHubSource).mockImplementationOnce(() => ({
       toString: () => 'owner/repo@main:failing.ts',
       fetch: vi.fn(async () => {
@@ -224,7 +224,6 @@ describe('syncFiles', () => {
   });
 
   it('sets allFailed flag when all files fail', async () => {
-
     vi.mocked(createGitHubSource).mockImplementation(() => ({
       toString: () => 'owner/repo@main:failing.ts',
       fetch: vi.fn(async () => {
