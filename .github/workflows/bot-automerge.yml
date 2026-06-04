@@ -34,6 +34,8 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
+      # secrets context is unavailable in step-level if; hoist presence here.
+      APP_KEY_SET: ${{ secrets.APP_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v6
       - name: Dependabot metadata
@@ -84,7 +86,7 @@ jobs:
           fi
       - name: Mint app token
         id: app-token
-        if: vars.APP_ID != ''
+        if: vars.APP_ID != '' && env.APP_KEY_SET == 'true'
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.APP_ID }}
