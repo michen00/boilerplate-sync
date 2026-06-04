@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as core from '@actions/core';
-import { isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
+import { createGitHubSource, isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
 import { syncFiles } from '../src/sync';
 import type { ActionInputs } from '../src/sources/types';
 
@@ -313,6 +313,18 @@ describe('syncFiles glob expansion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(isGlobPattern).mockImplementation((pattern: string) => pattern.includes('*'));
+    // clearAllMocks keeps implementations; earlier suites override
+    // createGitHubSource, so pin the default shape for isolation.
+    vi.mocked(createGitHubSource).mockImplementation(() => ({
+      toString: () => 'owner/repo@main:path/file.ts',
+      fetch: vi.fn(async () => ({
+        content: 'mock content',
+        resolvedRef: 'main',
+      })),
+      type: 'github',
+      getSourceId: () => 'owner/repo',
+      getRef: () => 'main',
+    }));
   });
 
   afterEach(() => {
