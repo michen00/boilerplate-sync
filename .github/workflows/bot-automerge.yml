@@ -6,9 +6,16 @@ on:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
 # A ruleset that requires status checks to pass should be configured for the repository.
+#
+# Hands-free dist commits need a GitHub App credential: set the APP_ID repo
+# variable and the APP_PRIVATE_KEY secret in BOTH stores (Actions and
+# Dependabot — dependabot-triggered runs only see Dependabot secrets).
+# App-token API pushes are GitHub-signed and re-fire pull_request CI.
+# Without the App, the commit falls back to GITHUB_TOKEN: still verified,
+# but CI does not re-fire on the new head and the armed auto-merge waits
+# until a maintainer re-triggers checks.
 
 permissions:
-  actions: write
   contents: write
   packages: read
   pull-requests: write
@@ -75,25 +82,24 @@ jobs:
           else
             echo "level=warning" >> "$GITHUB_OUTPUT"
           fi
+      - name: Mint app token
+        id: app-token
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Commit build changes
         id: commit
         uses: iarekylew00t/verified-bot-commit@v2
         with:
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.head.ref }}
           if-no-commit: ${{ steps.log-level.outputs.level }}
           message: 'build(dist): rebuild the action'
           update-local: false
           files: |
             dist/**
-      - name: Re-trigger CI on the rebuilt head
-        if: steps.commit.outputs.commit != ''
-        env:
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          # API pushes made with GITHUB_TOKEN do not re-fire pull_request
-          # workflows, so required checks would never report on the new head.
-          # workflow_dispatch is exempt from that suppression.
-          gh workflow run ci.yml --ref "$HEAD_REF" --repo "$GITHUB_REPOSITORY"
       - name: Check merge eligibility
         id: eligible
         env:
@@ -121,32 +127,10 @@ jobs:
             echo "::info::pre-commit-ci PR, eligible for auto-merge"
             echo "should_merge=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Wait for required checks
-        id: checks
-        if: steps.eligible.outputs.should_merge == 'true'
-        run: |
-          echo "::info::Waiting for required checks to pass..."
-          # A freshly dispatched CI run takes a moment to report its check
-          # runs on the new head; tolerate that window instead of failing.
-          for attempt in $(seq 1 30); do
-            if output=$(gh pr checks "$PR_NUMBER" --required --watch --fail-fast 2>&1); then
-              echo "::info::All required checks passed"
-              echo "checks_passed=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            if [[ "$output" == *"no required checks reported"* ]]; then
-              echo "::info::No checks reported yet (attempt $attempt), retrying in 10s"
-              sleep 10
-              continue
-            fi
-            echo "$output"
-            echo "::error::Required checks failed"
-            exit 1
-          done
-          echo "::error::Timed out waiting for required checks to appear"
-          exit 1
+      # No wait step: auto-merge waits for required checks server-side, and
+      # make check above already validated the tree being approved.
       - name: Approve PR
-        if: steps.checks.outputs.checks_passed == 'true'
+        if: steps.eligible.outputs.should_merge == 'true'
         run: |
           REVIEW_STATE=$(gh pr view "$PR_NUMBER" --json reviewDecision -q .reviewDecision)
           if [ "$REVIEW_STATE" != "APPROVED" ]; then
