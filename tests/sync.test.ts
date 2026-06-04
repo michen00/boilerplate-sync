@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as core from '@actions/core';
-import { createGitHubSource, isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
+import { isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
 import { syncFiles } from '../src/sync';
 import type { ActionInputs } from '../src/sources/types';
 
@@ -54,10 +54,9 @@ describe('syncFiles', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    // clearAllMocks keeps implementations; tests in this suite override
-    // createGitHubSource, so re-pin the default for order independence.
-    vi.mocked(createGitHubSource).mockImplementation(makeDefaultGitHubSource);
+    // resetAllMocks restores each vi.fn(impl) to its factory default, so
+    // per-test overrides cannot leak across tests or suites.
+    vi.resetAllMocks();
   });
 
   it('updates existing file when content differs', async () => {
@@ -323,18 +322,10 @@ describe('syncFiles glob expansion', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks restores factory defaults; only the glob predicate
+    // needs a suite-specific override on top.
+    vi.resetAllMocks();
     vi.mocked(isGlobPattern).mockImplementation((pattern: string) => pattern.includes('*'));
-    // clearAllMocks keeps implementations; earlier suites override
-    // createGitHubSource, so pin the default shape for isolation.
-    vi.mocked(createGitHubSource).mockImplementation(makeDefaultGitHubSource);
-  });
-
-  afterEach(() => {
-    // Restore the module-level defaults so ordering cannot leak into other suites
-    vi.mocked(isGlobPattern).mockImplementation(() => false);
-    vi.mocked(listFilesMatchingGlob).mockImplementation(async () => []);
-    vi.mocked(createGitHubSource).mockImplementation(makeDefaultGitHubSource);
   });
 
   it('fans out a glob pattern into one sync per matched file', async () => {
