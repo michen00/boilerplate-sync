@@ -8,6 +8,7 @@ on:
 # A ruleset that requires status checks to pass should be configured for the repository.
 
 permissions:
+  actions: write
   contents: write
   packages: read
   pull-requests: write
@@ -65,7 +66,9 @@ jobs:
             if [ "$DEPENDENCY_TYPE" = "direct:development" ]; then
               echo "level=notice" >> "$GITHUB_OUTPUT"
             elif [ "$DEPENDENCY_TYPE" = "direct:production" ]; then
-              echo "level=error" >> "$GITHUB_OUTPUT"
+              # A no-op rebuild is benign; CI's dist-up-to-date check is the
+              # real staleness gate. Keep it visible without failing the run.
+              echo "level=warning" >> "$GITHUB_OUTPUT"
             else
               echo "level=warning" >> "$GITHUB_OUTPUT"
             fi
@@ -73,6 +76,7 @@ jobs:
             echo "level=warning" >> "$GITHUB_OUTPUT"
           fi
       - name: Commit build changes
+        id: commit
         uses: iarekylew00t/verified-bot-commit@v2
         with:
           ref: ${{ github.event.pull_request.head.ref }}
@@ -80,7 +84,19 @@ jobs:
           message: 'build(dist): rebuild the action'
           update-local: false
           files: |
-            dist/
+            dist/**
+      - name: Re-trigger CI on the rebuilt head
+        if: steps.commit.outputs.commit != ''
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # API pushes made with GITHUB_TOKEN do not re-fire pull_request
+          # workflows, so required checks would never report on the new head.
+          # workflow_dispatch is exempt from that suppression.
+          gh workflow run ci.yml --ref "$HEAD_REF" --repo "$GITHUB_REPOSITORY"
+          # Give the dispatched run a moment to create its check runs before
+          # the watch step below queries them.
+          sleep 30
       - name: Check merge eligibility
         id: eligible
         env:
