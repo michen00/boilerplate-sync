@@ -1,0 +1,34 @@
+---
+name: App token check
+
+# On-demand health check for the bot-automerge App credential: mints an
+# installation token from vars.APP_ID + secrets.APP_PRIVATE_KEY (Actions
+# store) and probes repo access with it. Read-only; validates the same
+# path bot-automerge uses before a real dependabot PR exercises it.
+# The Dependabot-store copy of the key is not testable here — only a
+# dependabot-triggered run reads that store.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: Probe repo access with the minted token
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY" --jq '.full_name' \
+            | grep -qx "$GITHUB_REPOSITORY"
+          echo "::notice::App token minted and repo access confirmed"
