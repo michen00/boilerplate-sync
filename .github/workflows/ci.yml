@@ -120,3 +120,49 @@ jobs:
             echo "::error::Expected failed-count=0, got ${{ steps.sync.outputs.failed-count }}"
             exit 1
           fi
+
+      - name: Test action (real write)
+        uses: ./
+        id: sync-write
+        with:
+          sources: |
+            - source: actions/checkout
+              file_pairs:
+                - local_path: .ci-test-synced-license
+                  source_path: LICENSE
+          github-token: ${{ github.token }}
+          # Same mapping with create-missing enabled: the action must fetch
+          # the file and write it into the runner workspace (never committed).
+          create-missing: 'true'
+
+      - name: Verify written file and outputs
+        run: |
+          echo "has-changes: ${{ steps.sync-write.outputs.has-changes }}"
+          echo "updated-count: ${{ steps.sync-write.outputs.updated-count }}"
+          echo "failed-count: ${{ steps.sync-write.outputs.failed-count }}"
+
+          # updated-count includes created files
+          if [ "${{ steps.sync-write.outputs.has-changes }}" != "true" ]; then
+            echo "::error::Expected has-changes=true (see echoed outputs above)"
+            exit 1
+          fi
+          if [ "${{ steps.sync-write.outputs.updated-count }}" != "1" ]; then
+            echo "::error::Expected updated-count=1 (see echoed outputs above)"
+            exit 1
+          fi
+          if [ "${{ steps.sync-write.outputs.failed-count }}" != "0" ]; then
+            echo "::error::Expected failed-count=0 (see echoed outputs above)"
+            exit 1
+          fi
+
+          # The file must exist with the upstream content actually fetched
+          if [ ! -s .ci-test-synced-license ]; then
+            echo "::error::Expected .ci-test-synced-license to exist and be non-empty"
+            exit 1
+          fi
+          if ! grep -q "MIT License" .ci-test-synced-license; then
+            echo "::error::Synced file does not contain expected upstream content"
+            head -5 .ci-test-synced-license
+            exit 1
+          fi
+          rm .ci-test-synced-license
