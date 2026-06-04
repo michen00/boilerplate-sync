@@ -1,5 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs/promises';
+import * as core from '@actions/core';
+import { createGitHubSource, isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
 import { syncFiles } from '../src/sync';
 import type { ActionInputs } from '../src/sources/types';
 
@@ -15,15 +17,25 @@ vi.mock('@actions/core', () => ({
   endGroup: vi.fn(),
 }));
 
-// Mock the GitHub source
-vi.mock('../src/sources/github', () => ({
-  createGitHubSource: vi.fn(() => ({
+// Shared default for the createGitHubSource mock; vi.hoisted makes it
+// visible to the hoisted vi.mock factory, and resetAllMocks in the suite
+// hooks restores mocks to this factory default between tests.
+const { makeDefaultGitHubSource } = vi.hoisted(() => ({
+  makeDefaultGitHubSource: () => ({
     toString: () => 'owner/repo@main:path/file.ts',
     fetch: vi.fn(async () => ({
       content: 'mock content',
       resolvedRef: 'main',
     })),
-  })),
+    type: 'github' as const,
+    getSourceId: () => 'owner/repo',
+    getRef: () => 'main',
+  }),
+}));
+
+// Mock the GitHub source
+vi.mock('../src/sources/github', () => ({
+  createGitHubSource: vi.fn(makeDefaultGitHubSource),
   isGlobPattern: vi.fn(() => false), // Default to not a glob pattern
   listFilesMatchingGlob: vi.fn(async () => []),
 }));
@@ -43,7 +55,9 @@ describe('syncFiles', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks restores each vi.fn(impl) to its factory default, so
+    // per-test overrides cannot leak across tests or suites.
+    vi.resetAllMocks();
   });
 
   it('updates existing file when content differs', async () => {
@@ -182,8 +196,6 @@ describe('syncFiles', () => {
   });
 
   it('stops processing on first failure when fail-on-error is true', async () => {
-    const { createGitHubSource } = await import('../src/sources/github');
-
     vi.mocked(createGitHubSource).mockImplementationOnce(() => ({
       toString: () => 'owner/repo@main:failing.ts',
       fetch: vi.fn(async () => {
@@ -212,8 +224,6 @@ describe('syncFiles', () => {
   });
 
   it('sets allFailed flag when all files fail', async () => {
-    const { createGitHubSource } = await import('../src/sources/github');
-
     vi.mocked(createGitHubSource).mockImplementation(() => ({
       toString: () => 'owner/repo@main:failing.ts',
       fetch: vi.fn(async () => {
@@ -231,7 +241,6 @@ describe('syncFiles', () => {
   });
 
   it('uses per-source token when provided', async () => {
-    const { createGitHubSource } = await import('../src/sources/github');
     const mockFetch = vi.fn(async () => ({
       content: 'mock content',
       resolvedRef: 'main',
@@ -268,7 +277,6 @@ describe('syncFiles', () => {
   });
 
   it('falls back to github-token when no source-token is provided', async () => {
-    const { createGitHubSource } = await import('../src/sources/github');
     const mockFetch = vi.fn(async () => ({
       content: 'mock content',
       resolvedRef: 'main',
@@ -308,21 +316,14 @@ describe('syncFiles glob expansion', () => {
     failOnError: false,
   };
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    const { isGlobPattern } = await import('../src/sources/github');
+  beforeEach(() => {
+    // resetAllMocks restores factory defaults; only the glob predicate
+    // needs a suite-specific override on top.
+    vi.resetAllMocks();
     vi.mocked(isGlobPattern).mockImplementation((pattern: string) => pattern.includes('*'));
   });
 
-  afterEach(async () => {
-    // Restore the module-level defaults so ordering cannot leak into other suites
-    const { isGlobPattern, listFilesMatchingGlob } = await import('../src/sources/github');
-    vi.mocked(isGlobPattern).mockImplementation(() => false);
-    vi.mocked(listFilesMatchingGlob).mockImplementation(async () => []);
-  });
-
   it('fans out a glob pattern into one sync per matched file', async () => {
-    const { listFilesMatchingGlob } = await import('../src/sources/github');
     vi.mocked(listFilesMatchingGlob).mockResolvedValue([
       '.github/workflows/ci.yml',
       '.github/dependabot.yml',
@@ -351,8 +352,6 @@ describe('syncFiles glob expansion', () => {
   });
 
   it('keeps the original pattern config when nothing matches', async () => {
-    const core = await import('@actions/core');
-
     vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
     vi.mocked(fs.mkdir).mockResolvedValue(undefined);
     vi.mocked(fs.writeFile).mockResolvedValue(undefined);
@@ -367,8 +366,6 @@ describe('syncFiles glob expansion', () => {
   });
 
   it('keeps the original pattern config when expansion fails', async () => {
-    const core = await import('@actions/core');
-    const { listFilesMatchingGlob } = await import('../src/sources/github');
     vi.mocked(listFilesMatchingGlob).mockRejectedValue(new Error('tree API unavailable'));
 
     vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));

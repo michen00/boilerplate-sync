@@ -16,7 +16,7 @@ Triage unresolved PR review comments from any reviewer through an interactive pi
 | `BOT_LOGINS`             | `copilot-pull-request-reviewer` | Known bot logins (for `--bots` filter)                                                                             |
 | `COPILOT_THREAD_AUTHORS` | `copilot-pull-request-reviewer` | Thread `author.login` values for Copilot code review in Step 8 (not the same string as REST `requested_reviewers`) |
 | `GEMINI_THREAD_AUTHORS`  | `gemini-code-assist`            | Thread `author.login` values for Gemini Code Assist in Step 8; REST uses `gemini-code-assist[bot]`                 |
-| `AUTO_TRIAGE_TAG`        | `[Auto-triage]`                 | Prefix to detect gh-aw pre-triage replies (synced with `.github/workflows/review-triage.md` — update both)         |
+| `AUTO_TRIAGE_TAG`        | `[Auto-triage]`                 | Prefix to detect pre-triage replies; this repo ships no such workflow — align if a consumer adds one               |
 
 **Thread author vs review request:** GraphQL review-comment `author.login` identifies who started the thread; it is **not** always valid for [`POST .../pulls/{pull_number}/requested_reviewers`](https://docs.github.com/en/rest/pulls/review-requests). Copilot threads use `copilot-pull-request-reviewer`, but re-requesting Copilot uses **`gh pr edit ... --add-reviewer '@copilot'`** (or REST `copilot-pull-request-reviewer[bot]`). Gemini threads use `gemini-code-assist`; re-request via REST **`gemini-code-assist[bot]`** (there is no documented `gh pr edit` alias like `@copilot`). For any other bot, map thread `author` to a documented CLI or REST reviewer identity—**never** pass thread authors blindly into `reviewers[]`.
 
