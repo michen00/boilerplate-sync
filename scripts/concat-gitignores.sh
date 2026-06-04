@@ -144,7 +144,7 @@ done
 # If the only positional argument looks like an output path (e.g. .gitignore or
 # my-project/.gitignore), treat it as --output and use default URLs. Resolve relative
 # to repo root (parent of script dir) so the same path is used regardless of cwd.
-if [[ -n $INPUT_FILE && ($INPUT_FILE == .gitignore || $INPUT_FILE == */.gitignore) && "$OUTPUT_FILE" == ".gitignore" ]]; then
+if [[ -n "$INPUT_FILE" && ("$INPUT_FILE" == .gitignore || "$INPUT_FILE" == */.gitignore) && "$OUTPUT_FILE" == ".gitignore" ]]; then
   SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
   REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
   OUTPUT_FILE="$REPO_ROOT/$INPUT_FILE"
@@ -153,8 +153,8 @@ fi
 
 # Determine the source of URLs.
 # Priority: explicit input file > stdin (pipe or redirection) > defaults.
-if [[ -n $INPUT_FILE ]]; then
-  if [[ -f $INPUT_FILE ]]; then
+if [[ -n "$INPUT_FILE" ]]; then
+  if [[ -f "$INPUT_FILE" ]]; then
     parse_input_stream < "$INPUT_FILE"
   else
     echo "Input file not found: $INPUT_FILE" >&2
