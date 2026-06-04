@@ -55,6 +55,9 @@ describe('syncFiles', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks keeps implementations; tests in this suite override
+    // createGitHubSource, so re-pin the default for order independence.
+    vi.mocked(createGitHubSource).mockImplementation(makeDefaultGitHubSource);
   });
 
   it('updates existing file when content differs', async () => {
