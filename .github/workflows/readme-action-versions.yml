@@ -68,5 +68,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
         run: |
-          gh pr review --approve "$PR_NUMBER"
+          # Only approve if not already approved, so reruns don't add noisy
+          # duplicate reviews (mirrors bot-automerge.yml).
+          decision=$(gh pr view "$PR_NUMBER" --json reviewDecision -q .reviewDecision)
+          if [ "$decision" != "APPROVED" ]; then
+            gh pr review --approve "$PR_NUMBER"
+          fi
           gh pr merge --auto --squash "$PR_NUMBER"

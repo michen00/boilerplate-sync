@@ -32,13 +32,7 @@ body = """
     {% if github_username != "" %}\
         [@{{ github_username }}](https://github.com/{{ github_username }})\
     {% elif commit.author.name and commit.author.name != "" %}\
-        {% if commit.author.email and commit.author.email != "" %}\
-            [{{ commit.author.name }}](mailto:{{ commit.author.email }})\
-        {% else %}\
-            {{ commit.author.name }}\
-        {% endif %}\
-    {% elif commit.author.email and commit.author.email != "" %}\
-        [{{ commit.author.email }}](mailto:{{ commit.author.email }})\
+        {{ commit.author.name }}\
     {% endif %}
 {%- endmacro -%}
 {% if version %}\
@@ -77,26 +71,13 @@ body = """
         {% if not author_name is containing("[bot]") %}\
             {% set author_commits = commits | filter(attribute="author.name", value=author_name) %}\
             {% set last_commit = author_commits | last %}\
-            {% set author_email = last_commit.author.email %}\
             {% set github_username = self::get_github_username(commit=last_commit) %}\
-            {% if author_name and author_name != "" %}\
-                {% if github_username != "" %}\
-                    {% if author_email != "" %}\
-                - [@{{ github_username }}](https://github.com/{{ github_username }}) | [{{ author_name }}](mailto:{{ author_email }})
-                    {% else %}\
+            {% if github_username != "" and author_name and author_name != "" %}\
                 - [@{{ github_username }}](https://github.com/{{ github_username }}) | {{ author_name }}
-                    {% endif %}\
-                {% elif author_email != "" %}\
-                - [{{ author_name }}](mailto:{{ author_email }})
-                {% else %}\
+            {% elif github_username != "" %}\
+                - [@{{ github_username }}](https://github.com/{{ github_username }})
+            {% elif author_name and author_name != "" %}\
                 - {{ author_name }}
-                {% endif %}\
-            {% elif author_email != "" %}\
-                {% if github_username != "" %}\
-                - [@{{ github_username }}](https://github.com/{{ github_username }}) | [{{ author_email }}](mailto:{{ author_email }})
-                {% else %}\
-                - [{{ author_email }}](mailto:{{ author_email }})
-                {% endif %}\
             {% endif %}\
         {% endif %}\
     {% endfor %}\

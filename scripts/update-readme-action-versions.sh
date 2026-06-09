@@ -21,6 +21,11 @@ if [[ ${BASH_VERSINFO[0]:-0} -lt 4 ]]; then
   exit 1
 fi
 
+if ! command -v gh > /dev/null 2>&1; then
+  echo "Error: the gh CLI is required (GH_TOKEN in CI)." >&2
+  exit 1
+fi
+
 README="${1:-README.md}"
 SELF="michen00/boilerplate-sync"
 changed=false
@@ -40,8 +45,8 @@ latest_major() {
 
 # --- 1. Major-pinned refs: owner/repo@vN -> latest released major ---
 mapfile -t refs < <(
-  grep -oE 'uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@v[0-9]+' "$README" |
-    sed -E 's/^uses: //' | sort -u
+  { grep -oE 'uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@v[0-9]+([^0-9.]|$)' "$README" || true; } |
+    sed -E 's/^uses: //; s/([^0-9.])$//' | sort -u
 )
 
 if [[ ${#refs[@]} -gt 0 ]]; then
@@ -53,10 +58,14 @@ if [[ ${#refs[@]} -gt 0 ]]; then
       echo "::warning::no latest release for ${repo}; leaving @v${cur}"
       continue
     fi
-    if [[ "$latest" =~ ^[0-9]+$ ]] && ((latest > cur)); then
+    if [[ "$latest" =~ ^[0-9]+$ ]] && ((10#$latest > 10#$cur)); then
       echo "Bump ${repo}: v${cur} -> v${latest}"
-      # Trailing (non-digit|end-of-line) keeps @v6 from matching @v60.
-      sed -i.bak -E "s#${repo}@v${cur}([^0-9]|\$)#${repo}@v${latest}\1#g" "$README"
+      # Escape the literal '.' (the only ERE metacharacter a GitHub repo name
+      # can contain) via Bash parameter expansion -- no subshell, and Bash 4+
+      # is required above. Trailing (non-digit/non-dot|end) keeps @v6 out
+      # of @v60 and @v6.0.0.
+      repo_re="${repo//./\\.}"
+      sed -i.bak -E "s#${repo_re}@v${cur}([^0-9.]|\$)#${repo}@v${latest}\1#g" "$README"
       rm -f "${README}.bak"
       changed=true
     fi

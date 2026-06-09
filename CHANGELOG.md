@@ -10,34 +10,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com) and this p
 
 ### ✨ Features
 
-- **(ci)** push dist commits via GitHub App token ([#96](https://github.com/michen00/boilerplate-sync/issues/96)) - ([64750e0](https://github.com/michen00/boilerplate-sync/commit/64750e0e550788d1b4b59d8db80836140b41e645)) - [@michen00](https://github.com/michen00)
+- **(ci)** push dist commits via GitHub App token ([#96](https://github.com/michen00/boilerplate-sync/issues/96)) - ([64750e0](https://github.com/michen00/boilerplate-sync/commit/64750e0e550788d1b4b59d8db80836140b41e645)) - Michael I Chen
 
 ### 🐛 Fixes
 
-- sweep unresolved review threads from [#64](https://github.com/michen00/boilerplate-sync/issues/64)-[#96](https://github.com/michen00/boilerplate-sync/issues/96) ([#97](https://github.com/michen00/boilerplate-sync/issues/97)) - ([9f7f96d](https://github.com/michen00/boilerplate-sync/commit/9f7f96d4244e4883ff4caf741b6e045bb9f55ed3)) - [@michen00](https://github.com/michen00)
+- sweep unresolved review threads from [#64](https://github.com/michen00/boilerplate-sync/issues/64)-[#96](https://github.com/michen00/boilerplate-sync/issues/96) ([#97](https://github.com/michen00/boilerplate-sync/issues/97)) - ([9f7f96d](https://github.com/michen00/boilerplate-sync/commit/9f7f96d4244e4883ff4caf741b6e045bb9f55ed3)) - Michael I Chen
 
 ### 👥 Contributors
 
-- [@michen00](https://github.com/michen00) | [Michael I Chen](mailto:michael.chen.0@gmail.com)
+- Michael I Chen
 
 ## [1.0.0] - 2026-06-04
 
 ### ✨ Features
 
-- supersede pending PRs ([#64](https://github.com/michen00/boilerplate-sync/issues/64)) - ([d54489b](https://github.com/michen00/boilerplate-sync/commit/d54489b99eb0b0d9442aaaae1fa299bdd30485e4)) - [@michen00](https://github.com/michen00)
-- add glob pattern support for default_files - ([c9359cd](https://github.com/michen00/boilerplate-sync/commit/c9359cd89d4bc296377815723c97b16374f07182)) - [@michen00](https://github.com/michen00)
-- ❗ remove PR functions - ([628239d](https://github.com/michen00/boilerplate-sync/commit/628239d6fe263590165b14e8fc66b6e78c8e19f4)) - [@michen00](https://github.com/michen00)
-- ❗ remove unused config - ([9a32aed](https://github.com/michen00/boilerplate-sync/commit/9a32aede9fb969fdac3ab165c48cfa661fc151cc)) - [@michen00](https://github.com/michen00)
-- ❗ simplify config - ([ec19e37](https://github.com/michen00/boilerplate-sync/commit/ec19e3794466d2b09949049b972cb63cb7501d58)) - [@michen00](https://github.com/michen00)
-- add boilerplate - ([02052a8](https://github.com/michen00/boilerplate-sync/commit/02052a800e1ad805bd986c0150d0919d41aec327)) - [@michen00](https://github.com/michen00)
-- implement boilerplate-sync GitHub Action - ([1ce78a6](https://github.com/michen00/boilerplate-sync/commit/1ce78a639458ca47e78eaf18755a93a616167a10)) - [@michen00](https://github.com/michen00)
+- supersede pending PRs ([#64](https://github.com/michen00/boilerplate-sync/issues/64)) - ([d54489b](https://github.com/michen00/boilerplate-sync/commit/d54489b99eb0b0d9442aaaae1fa299bdd30485e4)) - Michael I Chen
+- add glob pattern support for default_files - ([c9359cd](https://github.com/michen00/boilerplate-sync/commit/c9359cd89d4bc296377815723c97b16374f07182)) - Michael I Chen
+- ❗ remove PR functions - ([628239d](https://github.com/michen00/boilerplate-sync/commit/628239d6fe263590165b14e8fc66b6e78c8e19f4)) - Michael I Chen
+- ❗ remove unused config - ([9a32aed](https://github.com/michen00/boilerplate-sync/commit/9a32aede9fb969fdac3ab165c48cfa661fc151cc)) - Michael I Chen
+- ❗ simplify config - ([ec19e37](https://github.com/michen00/boilerplate-sync/commit/ec19e3794466d2b09949049b972cb63cb7501d58)) - Michael I Chen
+- add boilerplate - ([02052a8](https://github.com/michen00/boilerplate-sync/commit/02052a800e1ad805bd986c0150d0919d41aec327)) - Michael I Chen
+- implement boilerplate-sync GitHub Action - ([1ce78a6](https://github.com/michen00/boilerplate-sync/commit/1ce78a639458ca47e78eaf18755a93a616167a10)) - Michael I Chen
 
 ### 🐛 Fixes
 
-- **(action.yml)** escape the dollar sign - ([9e27ec9](https://github.com/michen00/boilerplate-sync/commit/9e27ec97afeb16eee93926fefebc1aca32aebcfa)) - [@michen00](https://github.com/michen00)
-- **(ci)** tolerate check-run lag after CI dispatch ([#94](https://github.com/michen00/boilerplate-sync/issues/94)) - ([e644bad](https://github.com/michen00/boilerplate-sync/commit/e644bad4059d0ceb22cef24d5e1d616ebf0b714a)) - [@michen00](https://github.com/michen00)
-- **(ci)** repair bot-automerge dist commit flow ([#92](https://github.com/michen00/boilerplate-sync/issues/92)) - ([9e29a74](https://github.com/michen00/boilerplate-sync/commit/9e29a74ee26b003e0efe02ba0154f280bfe6c817)) - [@michen00](https://github.com/michen00)
-- add missing composite - ([de0b167](https://github.com/michen00/boilerplate-sync/commit/de0b1673b9c46e5c233c1c2a8a4e31ee16b98f25)) - [@michen00](https://github.com/michen00)
+- **(action.yml)** escape the dollar sign - ([9e27ec9](https://github.com/michen00/boilerplate-sync/commit/9e27ec97afeb16eee93926fefebc1aca32aebcfa)) - Michael I Chen
+- **(ci)** tolerate check-run lag after CI dispatch ([#94](https://github.com/michen00/boilerplate-sync/issues/94)) - ([e644bad](https://github.com/michen00/boilerplate-sync/commit/e644bad4059d0ceb22cef24d5e1d616ebf0b714a)) - Michael I Chen
+- **(ci)** repair bot-automerge dist commit flow ([#92](https://github.com/michen00/boilerplate-sync/issues/92)) - ([9e29a74](https://github.com/michen00/boilerplate-sync/commit/9e29a74ee26b003e0efe02ba0154f280bfe6c817)) - Michael I Chen
+- add missing composite - ([de0b167](https://github.com/michen00/boilerplate-sync/commit/de0b1673b9c46e5c233c1c2a8a4e31ee16b98f25)) - Michael I Chen
 
 ### 👷 Build
 
@@ -45,6 +45,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com) and this p
 
 ### 👥 Contributors
 
-- [@michen00](https://github.com/michen00) | [Michael I Chen](mailto:michael.chen.0@gmail.com)
+- Michael I Chen
 
 <!-- generated by git-cliff -->
