@@ -58,7 +58,7 @@ if [[ ${#refs[@]} -gt 0 ]]; then
       echo "::warning::no latest release for ${repo}; leaving @v${cur}"
       continue
     fi
-    if [[ "$latest" =~ ^[0-9]+$ ]] && ((latest > cur)); then
+    if [[ "$latest" =~ ^[0-9]+$ ]] && ((10#$latest > 10#$cur)); then
       echo "Bump ${repo}: v${cur} -> v${latest}"
       # Escape the literal '.' (the only ERE metacharacter a GitHub repo name
       # can contain) via Bash parameter expansion -- no subshell, and Bash 4+
