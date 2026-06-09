@@ -6,7 +6,7 @@ All notable changes will be documented in this file. See [conventional commits](
 
 The format is based on [Keep a Changelog](https://keepachangelog.com) and this project adheres to [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.0.1](https://github.com/michen00/boilerplate-sync/compare/v1.0.0..v1.0.1) - 2026-06-09
 
 ### ✨ Features
 
@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com) and this p
 
 ### 🐛 Fixes
 
+- resolve post-merge review findings ([#109](https://github.com/michen00/boilerplate-sync/issues/109)) - ([683564f](https://github.com/michen00/boilerplate-sync/commit/683564ff069e2f7b8d0434a151c3262ec69a0128)) - Michael I Chen
 - sweep unresolved review threads from [#64](https://github.com/michen00/boilerplate-sync/issues/64)-[#96](https://github.com/michen00/boilerplate-sync/issues/96) ([#97](https://github.com/michen00/boilerplate-sync/issues/97)) - ([9f7f96d](https://github.com/michen00/boilerplate-sync/commit/9f7f96d4244e4883ff4caf741b6e045bb9f55ed3)) - Michael I Chen
 
 ### 👥 Contributors
