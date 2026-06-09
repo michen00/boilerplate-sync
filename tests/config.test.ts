@@ -1,5 +1,24 @@
-import { describe, it, expect } from 'vitest';
-import { parseSourcesInput, normalizeSources, ConfigError } from '../src/config';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import * as core from '@actions/core';
+
+import {
+  parseSourcesInput,
+  normalizeSources,
+  getInputs,
+  logConfig,
+  ConfigError,
+} from '../src/config';
+
+// Mock @actions/core so getInputs/logConfig run without a real Actions
+// runtime; mirrors the factory style in sync.test.ts.
+vi.mock('@actions/core', () => ({
+  getInput: vi.fn(),
+  getBooleanInput: vi.fn(),
+  info: vi.fn(),
+  startGroup: vi.fn(),
+  endGroup: vi.fn(),
+}));
 
 describe('parseSourcesInput', () => {
   describe('valid inputs with default_files', () => {
@@ -371,6 +390,26 @@ describe('parseSourcesInput', () => {
 
       expect(() => parseSourcesInput(yaml)).toThrow('Source 2:');
     });
+
+    it('throws when a source entry is not an object', () => {
+      const yaml = `
+        - just-a-string
+      `;
+
+      expect(() => parseSourcesInput(yaml)).toThrow(ConfigError);
+      expect(() => parseSourcesInput(yaml)).toThrow('Expected an object');
+    });
+
+    it('throws when a file_pairs entry is not an object', () => {
+      const yaml = `
+        - source: org/repo
+          file_pairs:
+            - just-a-string
+      `;
+
+      expect(() => parseSourcesInput(yaml)).toThrow(ConfigError);
+      expect(() => parseSourcesInput(yaml)).toThrow('Expected an object');
+    });
   });
 
   describe('normalizeSources', () => {
@@ -490,5 +529,114 @@ describe('parseSourcesInput', () => {
       expect(normalized[1].source).toBe('org/repo2');
       expect(normalized[1].sourceToken).toBe('token');
     });
+  });
+});
+
+describe('getInputs', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('returns validated inputs from the action environment', () => {
+    const sourcesYaml = `
+      - source: org/repo
+        default_files:
+          - .eslintrc.js
+    `;
+    vi.mocked(core.getInput).mockImplementation((name: string) => {
+      if (name === 'sources') return sourcesYaml;
+      if (name === 'github-token') return 'ghp_token';
+      return '';
+    });
+    vi.mocked(core.getBooleanInput).mockImplementation(
+      (name: string) => name === 'create-missing'
+    );
+
+    const inputs = getInputs();
+
+    expect(inputs.githubToken).toBe('ghp_token');
+    expect(inputs.createMissing).toBe(true);
+    expect(inputs.failOnError).toBe(false);
+    expect(inputs.sources).toHaveLength(1);
+    expect(inputs.sources[0].source).toBe('org/repo');
+  });
+
+  it('throws when github-token is empty', () => {
+    vi.mocked(core.getInput).mockImplementation((name: string) =>
+      name === 'sources'
+        ? `
+          - source: org/repo
+            default_files:
+              - file.js
+        `
+        : ''
+    );
+    vi.mocked(core.getBooleanInput).mockReturnValue(false);
+
+    expect(() => getInputs()).toThrow(ConfigError);
+    expect(() => getInputs()).toThrow('github-token is required');
+  });
+
+  it('propagates parse errors from an invalid sources input', () => {
+    vi.mocked(core.getInput).mockImplementation((name: string) =>
+      name === 'sources' ? 'not-an-array' : 'ghp_token'
+    );
+    vi.mocked(core.getBooleanInput).mockReturnValue(false);
+
+    expect(() => getInputs()).toThrow(ConfigError);
+  });
+});
+
+describe('logConfig', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  const loggedLines = (): string =>
+    vi.mocked(core.info).mock.calls.map((call) => String(call[0])).join('\n');
+
+  it('logs counts and per-source details for default_files and file_pairs', () => {
+    logConfig({
+      sources: [
+        {
+          source: 'org/repo',
+          ref: 'main',
+          'source-token': 'secret',
+          default_files: ['.eslintrc.js'],
+          file_pairs: [
+            { local_path: 'a.js', source_path: 'src/a.js' },
+            { local_path: 'b.js' },
+          ],
+        },
+      ],
+      githubToken: 'ghp_token',
+      createMissing: true,
+      failOnError: false,
+    });
+
+    const logged = loggedLines();
+    expect(logged).toContain('Sources: 1');
+    expect(logged).toContain('Files to sync: 3');
+    expect(logged).toContain('org/repo@main');
+    expect(logged).toContain('(custom token)');
+    expect(logged).toContain('.eslintrc.js');
+    expect(logged).toContain('a.js <- src/a.js');
+    // source_path falls back to local_path when omitted
+    expect(logged).toContain('b.js <- b.js');
+    expect(core.startGroup).toHaveBeenCalledWith('Sources configuration');
+    expect(core.endGroup).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the custom-token marker and shows (default) ref when absent', () => {
+    logConfig({
+      sources: [{ source: 'org/repo', default_files: ['only.js'] }],
+      githubToken: 'ghp_token',
+      createMissing: false,
+      failOnError: true,
+    });
+
+    const logged = loggedLines();
+    expect(logged).toContain('org/repo@(default)');
+    expect(logged).not.toContain('(custom token)');
   });
 });
