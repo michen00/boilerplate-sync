@@ -441,11 +441,12 @@ awk '
   in_unreleased { print }
 ' "$CLIFF_OUTPUT" > "$TEMP_FILE"
 
-# Check if we got valid content
+# An empty section means there are no unreleased commits (e.g. HEAD is
+# exactly a release tag). That is a clean no-op, not an error -- bail out
+# successfully so scheduled/dispatch runs don't fail spuriously.
 if [ ! -s "$TEMP_FILE" ]; then
-  echo "Error: No Unreleased section found in git cliff output" >&2
-  rm -f "$TEMP_FILE" "$CLIFF_OUTPUT"
-  exit 1
+  echo "No unreleased changes found; ${CHANGELOG} is already up to date." >&2
+  exit 0
 fi
 
 # Remove trailing whitespace and ensure the extracted section ends with exactly one newline
