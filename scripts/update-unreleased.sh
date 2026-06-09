@@ -445,7 +445,7 @@ awk '
 # exactly a release tag). That is a clean no-op, not an error -- bail out
 # successfully so scheduled/dispatch runs don't fail spuriously.
 if [ ! -s "$TEMP_FILE" ]; then
-  echo "No unreleased changes found; CHANGELOG.md is already up to date." >&2
+  echo "No unreleased changes found; ${CHANGELOG} is already up to date." >&2
   exit 0
 fi
 
