@@ -3,7 +3,8 @@ name: App token check
 
 # On-demand health check for the bot-automerge App credential: mints an
 # installation token from vars.APP_ID + secrets.APP_PRIVATE_KEY (Actions
-# store) and probes repo access with it. Read-only; validates the same
+# store) and probes repo access with it. The probe only reads, though the
+# minted token carries whatever the App is granted; it validates the same
 # path bot-automerge uses before a real dependabot PR exercises it.
 # The Dependabot-store copy of the key is not testable here — only a
 # dependabot-triggered run reads that store.
@@ -19,6 +20,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Verify App credentials are configured
+        env:
+          APP_ID: ${{ vars.APP_ID }}
+          APP_KEY_SET: ${{ secrets.APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -z "$APP_ID" ] || [ "$APP_KEY_SET" != "true" ]; then
+            echo "::error::Set vars.APP_ID and secrets.APP_PRIVATE_KEY first."
+            exit 1
+          fi
       - name: Mint app token
         id: app-token
         uses: actions/create-github-app-token@v3
