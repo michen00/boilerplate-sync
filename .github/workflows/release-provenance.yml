@@ -1,0 +1,58 @@
+---
+name: Release provenance
+
+# Generate a signed SLSA build-provenance attestation for the published
+# action bundle (dist/index.js). Keyless via GitHub OIDC + sigstore -- no
+# long-lived signing secret. Consumers verify with:
+#   gh attestation verify dist/index.js --repo michen00/boilerplate-sync
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attest (e.g. v1.0.3)
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the released tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Rebuild from source so the attestation covers a bundle CI produced,
+      # then confirm it is byte-identical to the committed dist/ (the same
+      # invariant CI enforces). A drift here means the tag's dist/ was not
+      # built from its own source.
+      - name: Build
+        run: npm run build
+
+      - name: Verify rebuilt dist matches the committed bundle
+        run: |
+          if [ -n "$(git status --porcelain dist/)" ]; then
+            echo "::error::Rebuilt dist/ differs from the committed bundle at this tag."
+            git diff dist/
+            exit 1
+          fi
+
+      - name: Attest build provenance for dist/index.js
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/index.js
