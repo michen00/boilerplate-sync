@@ -45,8 +45,8 @@ latest_major() {
 
 # --- 1. Major-pinned refs: owner/repo@vN -> latest released major ---
 mapfile -t refs < <(
-  { grep -oE 'uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@v[0-9]+' "$README" || true; } |
-    sed -E 's/^uses: //' | sort -u
+  { grep -oE 'uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@v[0-9]+([^0-9.]|$)' "$README" || true; } |
+    sed -E 's/^uses: //; s/([^0-9.])$//' | sort -u
 )
 
 if [[ ${#refs[@]} -gt 0 ]]; then
@@ -62,9 +62,10 @@ if [[ ${#refs[@]} -gt 0 ]]; then
       echo "Bump ${repo}: v${cur} -> v${latest}"
       # Escape the literal '.' (the only ERE metacharacter a GitHub repo name
       # can contain) via Bash parameter expansion -- no subshell, and Bash 4+
-      # is required above. Trailing (non-digit|end) keeps @v6 out of @v60.
+      # is required above. Trailing (non-digit/non-dot|end) keeps @v6 out
+      # of @v60 and @v6.0.0.
       repo_re="${repo//./\\.}"
-      sed -i.bak -E "s#${repo_re}@v${cur}([^0-9]|\$)#${repo}@v${latest}\1#g" "$README"
+      sed -i.bak -E "s#${repo_re}@v${cur}([^0-9.]|\$)#${repo}@v${latest}\1#g" "$README"
       rm -f "${README}.bak"
       changed=true
     fi
