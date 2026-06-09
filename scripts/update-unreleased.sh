@@ -446,7 +446,6 @@ awk '
 # successfully so scheduled/dispatch runs don't fail spuriously.
 if [ ! -s "$TEMP_FILE" ]; then
   echo "No unreleased changes found; CHANGELOG.md is already up to date." >&2
-  rm -f "$TEMP_FILE" "$CLIFF_OUTPUT"
   exit 0
 fi
 
