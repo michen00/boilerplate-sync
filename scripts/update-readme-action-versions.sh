@@ -60,9 +60,10 @@ if [[ ${#refs[@]} -gt 0 ]]; then
     fi
     if [[ "$latest" =~ ^[0-9]+$ ]] && ((latest > cur)); then
       echo "Bump ${repo}: v${cur} -> v${latest}"
-      # Escape ERE metacharacters in repo (e.g. a literal '.') so the search
-      # matches exactly. Trailing (non-digit|end) keeps @v6 out of @v60.
-      repo_re=$(printf '%s' "$repo" | sed -E 's/[.[(){}^$*+?|]/\\&/g')
+      # Escape the literal '.' (the only ERE metacharacter a GitHub repo name
+      # can contain) so the search matches exactly and stays portable across
+      # seds. Trailing (non-digit|end) keeps @v6 out of @v60.
+      repo_re=$(printf '%s' "$repo" | sed 's/\./\\./g')
       sed -i.bak -E "s#${repo_re}@v${cur}([^0-9]|\$)#${repo}@v${latest}\1#g" "$README"
       rm -f "${README}.bak"
       changed=true
