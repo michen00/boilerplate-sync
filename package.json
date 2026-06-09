@@ -1,6 +1,6 @@
 {
   "name": "boilerplate-sync",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "GitHub Action to sync project files from boilerplate repositories",
   "main": "dist/index.js",
   "scripts": {
