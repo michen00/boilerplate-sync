@@ -31,7 +31,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          # Build on the runtime the action targets (action.yml uses: node24,
+          # package.json engines: >=24) so the provenance reflects a supported
+          # build and never trips an engine check.
+          node-version: '24'
           cache: npm
 
       - name: Install dependencies
