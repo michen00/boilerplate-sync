@@ -62,7 +62,7 @@ jobs:
       # no-op (and codecov's tokenless path covers external contributors).
       - name: Upload coverage to Codecov
         if: >-
-          github.event_name == 'push' ||
+          github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository
         uses: codecov/codecov-action@v5
         with:
