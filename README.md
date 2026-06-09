@@ -349,7 +349,7 @@ If using a custom `source-token` for private source repositories, ensure the tok
 Release tags (`v*`) are signed and protected by a tag ruleset; only the repository owner can create, move, or delete them. The `v1` alias is movable by design (it tracks the latest `v1.x` release), so pin the action to a full commit SHA if your threat model includes compromise of this repository:
 
 ```yaml
-- uses: michen00/boilerplate-sync@ce4e7aaf973a43b42dc2898a275b9cda79b0880c # v1.0.2
+- uses: michen00/boilerplate-sync@8af489628750a5a81cb4918c64de072ccae0e8d2 # v1.0.3
 ```
 
 Report vulnerabilities privately via [GitHub security advisories](https://github.com/michen00/boilerplate-sync/security/advisories/new) — see [SECURITY.md](SECURITY.md). This is a personal project maintained on a best-effort basis.
