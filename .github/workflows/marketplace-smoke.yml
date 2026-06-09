@@ -3,7 +3,10 @@
 # a botched release (missing dist/, broken action.yml, or a stale @v1 alias)
 # before a user does. It cannot gate a PR: `uses:` always resolves the live
 # tag, not the PR's code, and takes no `${{ }}` expression. So it runs after a
-# release, on demand, and weekly as a canary against tag rot.
+# release, on demand, and weekly as a canary against tag rot. On a real
+# release it also exercises the just-published tag (checked out and run from a
+# path, since `uses:` cannot interpolate the tag), so a bad new tag like
+# v1.0.1 can't slip through while the @v1 alias still points at the old one.
 name: Marketplace smoke
 
 on:
@@ -85,6 +88,62 @@ jobs:
           HAS_CHANGES: ${{ steps.v100.outputs.has-changes }}
           UPDATED_COUNT: ${{ steps.v100.outputs.updated-count }}
           FAILED_COUNT: ${{ steps.v100.outputs.failed-count }}
+        run: |
+          echo "$REF: has-changes=$HAS_CHANGES updated=$UPDATED_COUNT failed=$FAILED_COUNT"
+          if [ "$HAS_CHANGES" != "true" ]; then
+            echo "::error::$REF expected has-changes=true"
+            exit 1
+          fi
+          if [ "$UPDATED_COUNT" != "1" ]; then
+            echo "::error::$REF expected updated-count=1"
+            exit 1
+          fi
+          if [ "$FAILED_COUNT" != "0" ]; then
+            echo "::error::$REF expected failed-count=0"
+            exit 1
+          fi
+          if [ ! -s "$FILE" ]; then
+            echo "::error::$REF synced file missing or empty"
+            exit 1
+          fi
+          if ! grep -q "MIT License" "$FILE"; then
+            echo "::error::$REF synced file lacks upstream content"
+            exit 1
+          fi
+          rm "$FILE"
+
+      # On a real release, also consume the just-published tag, not only the
+      # @v1 alias / immutable v1.0.0 above. `uses:` takes no expression, so
+      # check the tag out and run it from a path.
+      - name: Check out the released tag
+        if: github.event_name == 'release'
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.release.tag_name }}
+          path: ._released
+
+      - name: Consume the released tag
+        id: released
+        if: github.event_name == 'release'
+        uses: ./._released
+        with:
+          sources: |
+            - source: actions/checkout
+              file_pairs:
+                - local_path: .smoke-released-license
+                  source_path: LICENSE
+          github-token: ${{ github.token }}
+          create-missing: 'true'
+
+      - name: Verify released-tag result
+        if: github.event_name == 'release'
+        env:
+          REF: ${{ github.event.release.tag_name }}
+          FILE: .smoke-released-license
+          HAS_CHANGES: ${{ steps.released.outputs.has-changes }}
+          UPDATED_COUNT: ${{ steps.released.outputs.updated-count }}
+          FAILED_COUNT: ${{ steps.released.outputs.failed-count }}
         run: |
           echo "$REF: has-changes=$HAS_CHANGES updated=$UPDATED_COUNT failed=$FAILED_COUNT"
           if [ "$HAS_CHANGES" != "true" ]; then
