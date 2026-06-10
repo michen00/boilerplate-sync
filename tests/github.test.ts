@@ -41,6 +41,23 @@ describe('GitHubSource', () => {
       const source = createGitHubSource('owner/repo', 'path/to/file.ts');
       expect(source.toString()).toBe('owner/repo@default:path/to/file.ts');
     });
+
+    it('reflects the resolved ref after a fetch', async () => {
+      mockRepos.get.mockResolvedValue({ data: { default_branch: 'main' } });
+      mockRepos.getContent.mockResolvedValue({
+        data: {
+          type: 'file',
+          content: Buffer.from('content').toString('base64'),
+          sha: 'sha1',
+        },
+      });
+
+      const source = createGitHubSource('owner/repo', 'file.ts');
+      await source.fetch('token');
+
+      // After resolution, toString surfaces the resolved ref, not 'default'
+      expect(source.toString()).toBe('owner/repo@main:file.ts');
+    });
   });
 
   describe('getSourceId', () => {
@@ -224,8 +241,6 @@ describe('GitHubSource', () => {
       await source.fetch('token');
 
       expect(source.getResolvedRef()).toBe('main');
-      // toString now reports the resolved ref rather than 'default'
-      expect(source.toString()).toBe('owner/repo@main:file.ts');
     });
   });
 
