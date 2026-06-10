@@ -144,6 +144,89 @@ describe('GitHubSource', () => {
         'Authentication failed for owner/private-repo. Check your token.',
       );
     });
+
+    it('throws error when path is a non-file entry such as a submodule', async () => {
+      mockRepos.getContent.mockResolvedValue({
+        data: { type: 'submodule', name: 'vendored' },
+      });
+
+      const source = createGitHubSource('owner/repo', 'vendored', 'main');
+
+      await expect(source.fetch('token')).rejects.toThrow(
+        "Path 'vendored' is a submodule, not a file",
+      );
+    });
+
+    it('throws error when the file entry carries no content', async () => {
+      mockRepos.getContent.mockResolvedValue({
+        data: { type: 'file', content: '', sha: 'empty' },
+      });
+
+      const source = createGitHubSource('owner/repo', 'empty.ts', 'main');
+
+      await expect(source.fetch('token')).rejects.toThrow(
+        "No content returned for 'empty.ts'",
+      );
+    });
+
+    it('rethrows unrecognized errors unchanged', async () => {
+      const original = new Error('Service Unavailable');
+      mockRepos.getContent.mockRejectedValue(original);
+
+      const source = createGitHubSource('owner/repo', 'file.ts', 'main');
+
+      // Errors outside the Not Found / Bad credentials cases pass through verbatim
+      await expect(source.fetch('token')).rejects.toBe(original);
+    });
+
+    it('reuses the cached default branch across fetches for the same repo', async () => {
+      mockRepos.get.mockResolvedValue({
+        data: { default_branch: 'trunk' },
+      });
+      mockRepos.getContent.mockResolvedValue({
+        data: {
+          type: 'file',
+          content: Buffer.from('content').toString('base64'),
+          sha: 'sha1',
+        },
+      });
+
+      // No ref configured, so both fetches must resolve the default branch
+      const first = createGitHubSource('owner/repo', 'a.ts');
+      const second = createGitHubSource('owner/repo', 'b.ts');
+
+      const r1 = await first.fetch('token');
+      const r2 = await second.fetch('token');
+
+      expect(r1.resolvedRef).toBe('trunk');
+      expect(r2.resolvedRef).toBe('trunk');
+      // The default branch is looked up once and served from cache thereafter
+      expect(mockRepos.get).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('getResolvedRef', () => {
+    it('returns undefined before a fetch and the resolved ref afterwards', async () => {
+      mockRepos.get.mockResolvedValue({
+        data: { default_branch: 'main' },
+      });
+      mockRepos.getContent.mockResolvedValue({
+        data: {
+          type: 'file',
+          content: Buffer.from('content').toString('base64'),
+          sha: 'sha1',
+        },
+      });
+
+      const source = createGitHubSource('owner/repo', 'file.ts');
+      expect(source.getResolvedRef()).toBeUndefined();
+
+      await source.fetch('token');
+
+      expect(source.getResolvedRef()).toBe('main');
+      // toString now reports the resolved ref rather than 'default'
+      expect(source.toString()).toBe('owner/repo@main:file.ts');
+    });
   });
 
   describe('parseSource', () => {
