@@ -178,7 +178,8 @@ export function clearBranchCache(): void {
  * Check if a path contains glob pattern characters
  */
 export function isGlobPattern(path: string): boolean {
-  return new Minimatch(path, { magicalBraces: true }).hasMagic();
+  const matcher = new Minimatch(path, { magicalBraces: true });
+  return matcher.hasMagic() || matcher.braceExpand().length > 1;
 }
 
 /**

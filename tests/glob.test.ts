@@ -82,6 +82,7 @@ describe('isGlobPattern', () => {
 
   it('returns true for paths with brace expansion', () => {
     expect(isGlobPattern('{a,b}.ts')).toBe(true);
+    expect(isGlobPattern('{a,a}.ts')).toBe(true);
     expect(isGlobPattern('*.{js,ts}')).toBe(true);
   });
 
