@@ -212,6 +212,7 @@ export function normalizeSources(
           source: source.source,
           ref: source.ref,
           sourceToken: source['source-token'],
+          origin: 'default_files',
         });
       }
     }
@@ -225,6 +226,7 @@ export function normalizeSources(
           source: source.source,
           ref: source.ref,
           sourceToken: source['source-token'],
+          origin: 'file_pairs',
         });
       }
     }

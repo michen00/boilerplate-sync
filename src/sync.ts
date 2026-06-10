@@ -139,6 +139,16 @@ async function expandGlobPatterns(
       continue;
     }
 
+    // Globs are only supported in `default_files`, where local_path mirrors
+    // source_path. In `file_pairs` the explicit local_path would be silently
+    // discarded by expansion, so fail fast instead of remapping silently.
+    if (config.origin === 'file_pairs') {
+      throw new Error(
+        `Glob patterns are not supported in \`file_pairs\` ` +
+          `(source: '${config.source_path}'); use \`default_files\` for globs.`
+      );
+    }
+
     // It's a glob pattern - expand it
     core.info(`Expanding glob pattern: ${config.source_path}`);
 
