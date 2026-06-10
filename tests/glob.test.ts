@@ -6,33 +6,38 @@ import {
   listFilesMatchingGlob,
 } from '../src/sources/github';
 
-const DEFAULT_TREE = [
-  { type: 'blob', path: '.eslintrc.js' },
-  { type: 'blob', path: '.prettierrc' },
-  { type: 'blob', path: '.github/ISSUE_TEMPLATE/bug_report.md' },
-  { type: 'blob', path: '.github/ISSUE_TEMPLATE/feature_request.md' },
-  { type: 'blob', path: '.github/workflows/ci.yml' },
-  { type: 'blob', path: '.github/workflows/release.yml' },
-  { type: 'blob', path: 'src/index.ts' },
-  { type: 'blob', path: 'src/utils/helpers.ts' },
-  { type: 'blob', path: 'configs/tsconfig.json' },
-  { type: 'blob', path: 'configs/nested/config.json' },
-  { type: 'tree', path: 'src' }, // Directory, should be filtered out
-  { type: 'tree', path: '.github' }, // Directory, should be filtered out
-];
+// Shared mock fns so individual tests can drive the ref-resolution fallbacks.
+// vi.hoisted keeps them visible to the hoisted vi.mock factory; each mock
+// carries a happy-path default so vi.resetAllMocks() restores it per test.
+const { mockGit, mockRepos } = vi.hoisted(() => {
+  const defaultTree = [
+    { type: 'blob', path: '.eslintrc.js' },
+    { type: 'blob', path: '.prettierrc' },
+    { type: 'blob', path: '.github/ISSUE_TEMPLATE/bug_report.md' },
+    { type: 'blob', path: '.github/ISSUE_TEMPLATE/feature_request.md' },
+    { type: 'blob', path: '.github/workflows/ci.yml' },
+    { type: 'blob', path: '.github/workflows/release.yml' },
+    { type: 'blob', path: 'src/index.ts' },
+    { type: 'blob', path: 'src/utils/helpers.ts' },
+    { type: 'blob', path: 'configs/tsconfig.json' },
+    { type: 'blob', path: 'configs/nested/config.json' },
+    { type: 'tree', path: 'src' }, // Directory, should be filtered out
+    { type: 'tree', path: '.github' }, // Directory, should be filtered out
+  ];
 
-// Shared mock fns so individual tests can drive the ref-resolution fallbacks
-// (per-instance vi.fn()s could not be reconfigured from inside a test). Each
-// carries its happy-path default in the factory, so vi.resetAllMocks() restores
-// it before every test; fallback tests stack *Once overrides on top.
-const mockRepos = {
-  get: vi.fn(() => Promise.resolve({ data: { default_branch: 'main' } })),
-};
-const mockGit = {
-  getRef: vi.fn(() => Promise.resolve({ data: { object: { sha: 'abc123' } } })),
-  getTree: vi.fn(() => Promise.resolve({ data: { tree: DEFAULT_TREE } })),
-  getCommit: vi.fn(),
-};
+  return {
+    mockRepos: {
+      get: vi.fn(() => Promise.resolve({ data: { default_branch: 'main' } })),
+    },
+    mockGit: {
+      getRef: vi.fn(() =>
+        Promise.resolve({ data: { object: { sha: 'abc123' } } }),
+      ),
+      getTree: vi.fn(() => Promise.resolve({ data: { tree: defaultTree } })),
+      getCommit: vi.fn(),
+    },
+  };
+});
 
 // Mock @octokit/rest
 vi.mock('@octokit/rest', () => ({
