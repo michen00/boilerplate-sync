@@ -34,13 +34,13 @@ inputs:
 
 outputs:
   has-changes:
-    description: Whether any files were updated (true/false)
+    description: Whether any files were updated or created (true/false)
   updated-count:
-    description: Number of files successfully updated
+    description: Number of files updated or created
   failed-count:
     description: Number of files that failed to sync
   skipped-count:
-    description: Number of files skipped (unchanged)
+    description: Number of files skipped (unchanged, or missing when create-missing is disabled)
   summary:
     description: JSON summary of all sync operations
 
