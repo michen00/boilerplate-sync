@@ -308,6 +308,7 @@ Only update files that already exist:
 
 - name: Create pull request
   id: cpr
+  if: steps.sync.outputs.has-changes == 'true'
   uses: peter-evans/create-pull-request@v8
   with:
     branch: boilerplate-sync/${{ github.run_id }}
