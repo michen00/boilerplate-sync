@@ -1,10 +1,10 @@
 # Boilerplate Sync
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/michen00/boilerplate-sync/ci.yml?style=plastic)](https://github.com/michen00/boilerplate-sync/actions/workflows/ci.yml)
+[![Build Status](https://github.com/michen00/boilerplate-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/michen00/boilerplate-sync/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/michen00/boilerplate-sync?style=plastic)](https://codecov.io/gh/michen00/boilerplate-sync)
 [![Release](https://img.shields.io/github/v/release/michen00/boilerplate-sync?style=plastic)](https://github.com/michen00/boilerplate-sync/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=plastic)](CONTRIBUTING.md)
-[![License](https://img.shields.io/github/license/michen00/boilerplate-sync?style=plastic)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=plastic)](LICENSE)
 
 A GitHub Action that keeps your project boilerplate files in sync with another repository.
 
