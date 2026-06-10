@@ -26,7 +26,7 @@ If applicable, add screenshots to help explain your problem.
 
 - Action version: [e.g. v1.0.3 or a commit SHA]
 - Runner OS: [e.g. ubuntu-latest, macos-latest, windows-latest]
-- Relevant workflow snippet or link to the failing run
+- Relevant workflow snippet or link to the failing run: [e.g. link to run or YAML snippet]
 
 **Additional context**
 Add any other context about the problem here.
