@@ -1,5 +1,5 @@
 import { Octokit } from '@octokit/rest';
-import { minimatch } from 'minimatch';
+import { Minimatch, minimatch } from 'minimatch';
 import type { FileSource, FetchResult } from './types';
 
 /**
@@ -178,8 +178,7 @@ export function clearBranchCache(): void {
  * Check if a path contains glob pattern characters
  */
 export function isGlobPattern(path: string): boolean {
-  // Match glob special characters: *, ?, [, ], {, }
-  return /[*?[\]{}]/.test(path);
+  return new Minimatch(path, { magicalBraces: true }).hasMagic();
 }
 
 /**

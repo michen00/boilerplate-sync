@@ -76,6 +76,11 @@ describe('isGlobPattern', () => {
     expect(isGlobPattern('{a,b}.ts')).toBe(true);
     expect(isGlobPattern('*.{js,ts}')).toBe(true);
   });
+
+  it('returns false for literal bracket and brace characters', () => {
+    expect(isGlobPattern('docs/[draft.md')).toBe(false);
+    expect(isGlobPattern('docs/{draft}.md')).toBe(false);
+  });
 });
 
 describe('listFilesMatchingGlob', () => {
