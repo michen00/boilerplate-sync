@@ -12,8 +12,8 @@ A clear and concise description of what the bug is.
 **To Reproduce**
 Steps to reproduce the behavior:
 
-1. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-2. Run '...'
+1. Configure the action with '...'
+2. Run the workflow
 3. See error
 
 **Expected behavior**
@@ -24,9 +24,9 @@ If applicable, add screenshots to help explain your problem.
 
 **Environment (please complete the following information):**
 
-- VSCode Version: [e.g. 1.96.0]
-- Extension Version: [e.g. 0.3.0]
-- OS: [e.g. Windows 11, macOS Sonoma 14.5, Ubuntu 24.04]
+- Action version: [e.g. v1.0.3 or a commit SHA]
+- Runner OS: [e.g. ubuntu-latest, macos-latest, windows-latest]
+- Relevant workflow snippet or link to the failing run: [e.g. link to run or YAML snippet]
 
 **Additional context**
 Add any other context about the problem here.

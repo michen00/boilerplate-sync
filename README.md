@@ -183,21 +183,24 @@ When a glob pattern matches multiple files, each matched file is synced with `lo
 
 ## Outputs
 
-| Output          | Type     | Description                                                                     |
-| --------------- | -------- | ------------------------------------------------------------------------------- |
-| `has-changes`   | `string` | `"true"` if any files were updated or created, `"false"` otherwise. Always set. |
-| `updated-count` | `string` | Number of files updated or created. Always set.                                 |
-| `failed-count`  | `string` | Number of files that failed to sync. Always set.                                |
-| `skipped-count` | `string` | Number of files skipped (no changes detected). Always set.                      |
-| `summary`       | `JSON`   | Full sync summary with details on each file. Always set.                        |
+| Output          | Type     | Description                                                                                  |
+| --------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `has-changes`   | `string` | `"true"` if any files were updated or created, `"false"` otherwise. Always set.              |
+| `updated-count` | `string` | Number of files updated or created. Always set.                                              |
+| `failed-count`  | `string` | Number of files that failed to sync. Always set.                                             |
+| `skipped-count` | `string` | Number of files skipped (unchanged, or missing when create-missing is disabled). Always set. |
+| `summary`       | `JSON`   | Full sync summary with details on each file. Always set.                                     |
 
 ## Examples
 
 ### Real Working Example
 
-This repository includes a real, working example workflow at [`.github/workflows/sync-template.yml`](.github/workflows/sync-template.yml) that syncs multiple files from a [template repository for Python projects](https://github.com/michen00/template):
+This repository includes real, working example workflows that sync multiple files from a [template repository for Python projects](https://github.com/michen00/template):
 
-You can copy this workflow file and adapt it for your own needs. Simply modify the `sources` configuration to point to your template repository and add or remove files as needed.
+- [`.github/workflows/sync-template-non-workflow.yml`](.github/workflows/sync-template-non-workflow.yml) — syncs non-workflow files.
+- [`.github/workflows/sync-template-github-workflows.yml`](.github/workflows/sync-template-github-workflows.yml) — syncs `.github/workflows/*` files (requires additional permissions, as noted above).
+
+You can copy a workflow file and adapt it for your own needs. Simply modify the `sources` configuration to point to your template repository and add or remove files as needed. Note that these workflows also include repo-local steps (for example, the `./.github/actions/supersede-boilerplate-prs` action) that do not exist outside this repository — remove or replace those steps when adapting a workflow for your own project.
 
 ### Basic Usage
 
@@ -305,8 +308,8 @@ Only update files that already exist:
 
 - name: Create pull request
   id: cpr
+  if: steps.sync.outputs.has-changes == 'true'
   uses: peter-evans/create-pull-request@v8
-  needs: sync
   with:
     branch: boilerplate-sync/${{ github.run_id }}
     title: 'chore: sync boilerplate files'
@@ -319,7 +322,6 @@ Only update files that already exist:
 
 - name: Log PR URL
   if: steps.sync.outputs.has-changes == 'true'
-  needs: sync
   run: echo "PR created at ${{ steps.cpr.outputs.pull-request-url }}"
 ```
 
