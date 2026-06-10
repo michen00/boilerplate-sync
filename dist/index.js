@@ -32294,7 +32294,7 @@ function createGitHubSource(source, path3, ref) {
 }
 function isGlobPattern(path3) {
   const matcher = new Minimatch(path3, { magicalBraces: true });
-  return matcher.hasMagic() || matcher.braceExpand().length > 1;
+  return matcher.hasMagic() || /\{[^{}]*(?:,|\.\.)[^{}]*\}/.test(path3);
 }
 async function getDefaultBranch(owner, repo, token) {
   const cacheKey = `${owner}/${repo}`;

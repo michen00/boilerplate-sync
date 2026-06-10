@@ -179,7 +179,7 @@ export function clearBranchCache(): void {
  */
 export function isGlobPattern(path: string): boolean {
   const matcher = new Minimatch(path, { magicalBraces: true });
-  return matcher.hasMagic() || matcher.braceExpand().length > 1;
+  return matcher.hasMagic() || /\{[^{}]*(?:,|\.\.)[^{}]*\}/.test(path);
 }
 
 /**
