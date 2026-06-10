@@ -40,7 +40,7 @@ outputs:
   failed-count:
     description: Number of files that failed to sync
   skipped-count:
-    description: Number of files skipped (unchanged)
+    description: Number of files skipped (unchanged, or missing when create-missing is disabled)
   summary:
     description: JSON summary of all sync operations
 
