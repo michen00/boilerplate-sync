@@ -224,6 +224,40 @@ describe('syncFiles', () => {
     expect(summary.total).toBe(1); // Second file should not be processed
   });
 
+  it('treats a file that vanishes after the existence check as newly created', async () => {
+    // TOCTOU: fileExists sees the file, but it is gone by the time readFile
+    // runs. readFile swallows ENOENT and returns null, so sync writes it as new.
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    const enoent = Object.assign(new Error('no such file'), { code: 'ENOENT' });
+    vi.mocked(fs.readFile).mockRejectedValue(enoent);
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const summary = await syncFiles(mockInputs);
+
+    expect(summary.created.length).toBe(1);
+    expect(summary.created[0].isNew).toBe(true);
+    expect(summary.failed.length).toBe(0);
+  });
+
+  it('marks the file failed when reading an existing file errors (non-ENOENT)', async () => {
+    // File exists, but reading it raises a non-ENOENT error (e.g. EACCES).
+    // readFile only short-circuits to null on ENOENT, so this rethrows and
+    // the outer handler records the sync as failed rather than crashing.
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    const permissionError = Object.assign(new Error('permission denied'), {
+      code: 'EACCES',
+    });
+    vi.mocked(fs.readFile).mockRejectedValue(permissionError);
+
+    const summary = await syncFiles(mockInputs);
+
+    expect(summary.failed.length).toBe(1);
+    expect(summary.failed[0].error).toBe('permission denied');
+    expect(summary.updated.length).toBe(0);
+    expect(summary.created.length).toBe(0);
+  });
+
   it('sets allFailed flag when all files fail', async () => {
     vi.mocked(createGitHubSource).mockImplementation(() => ({
       toString: () => 'owner/repo@main:failing.ts',
