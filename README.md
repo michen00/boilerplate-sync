@@ -195,9 +195,12 @@ When a glob pattern matches multiple files, each matched file is synced with `lo
 
 ### Real Working Example
 
-This repository includes a real, working example workflow at [`.github/workflows/sync-template.yml`](.github/workflows/sync-template.yml) that syncs multiple files from a [template repository for Python projects](https://github.com/michen00/template):
+This repository includes real, working example workflows that sync multiple files from a [template repository for Python projects](https://github.com/michen00/template):
 
-You can copy this workflow file and adapt it for your own needs. Simply modify the `sources` configuration to point to your template repository and add or remove files as needed.
+- [`.github/workflows/sync-template-non-workflow.yml`](.github/workflows/sync-template-non-workflow.yml) — syncs non-workflow files.
+- [`.github/workflows/sync-template-github-workflows.yml`](.github/workflows/sync-template-github-workflows.yml) — syncs `.github/workflows/*` files (requires additional permissions, as noted above).
+
+You can copy a workflow file and adapt it for your own needs. Simply modify the `sources` configuration to point to your template repository and add or remove files as needed.
 
 ### Basic Usage
 
@@ -306,7 +309,6 @@ Only update files that already exist:
 - name: Create pull request
   id: cpr
   uses: peter-evans/create-pull-request@v8
-  needs: sync
   with:
     branch: boilerplate-sync/${{ github.run_id }}
     title: 'chore: sync boilerplate files'
@@ -319,7 +321,6 @@ Only update files that already exist:
 
 - name: Log PR URL
   if: steps.sync.outputs.has-changes == 'true'
-  needs: sync
   run: echo "PR created at ${{ steps.cpr.outputs.pull-request-url }}"
 ```
 
