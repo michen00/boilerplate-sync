@@ -379,4 +379,47 @@ describe('syncFiles glob expansion', () => {
     );
     expect(summary.total).toBe(1);
   });
+
+  it('rejects a glob in a file_pairs source instead of silently expanding it', async () => {
+    // A glob in file_pairs would lose its explicit local_path if expanded
+    // (the README forbids globs here); fail fast rather than silently remap.
+    const filePairsGlobInputs: ActionInputs = {
+      ...globInputs,
+      sources: [
+        {
+          source: 'owner/repo',
+          ref: 'main',
+          file_pairs: [
+            { local_path: 'local-dir/', source_path: '.github/ISSUE_TEMPLATE/*.md' },
+          ],
+        },
+      ],
+    };
+
+    await expect(syncFiles(filePairsGlobInputs)).rejects.toThrow(
+      "Glob patterns are not supported in `file_pairs` (source: '.github/ISSUE_TEMPLATE/*.md'); use `default_files` for globs."
+    );
+    // The remapped glob must never reach the tree-listing path.
+    expect(listFilesMatchingGlob).not.toHaveBeenCalled();
+  });
+
+  it('still expands globs originating from default_files', async () => {
+    // Guard above must not regress the supported default_files glob path.
+    vi.mocked(listFilesMatchingGlob).mockResolvedValue([
+      '.github/workflows/ci.yml',
+      '.github/dependabot.yml',
+    ]);
+
+    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+    const summary = await syncFiles(globInputs);
+
+    expect(summary.total).toBe(2);
+    expect(summary.created.map(r => r.config.local_path)).toEqual([
+      '.github/workflows/ci.yml',
+      '.github/dependabot.yml',
+    ]);
+  });
 });
