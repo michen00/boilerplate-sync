@@ -1,41 +1,49 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearBranchCache,
+  getDefaultBranch,
   isGlobPattern,
   listFilesMatchingGlob,
 } from '../src/sources/github';
 
+// Shared mock fns so individual tests can drive the ref-resolution fallbacks.
+// vi.hoisted keeps them visible to the hoisted vi.mock factory; each mock
+// carries a happy-path default so vi.resetAllMocks() restores it per test.
+const { mockGit, mockRepos } = vi.hoisted(() => {
+  const defaultTree = [
+    { type: 'blob', path: '.eslintrc.js' },
+    { type: 'blob', path: '.prettierrc' },
+    { type: 'blob', path: '.github/ISSUE_TEMPLATE/bug_report.md' },
+    { type: 'blob', path: '.github/ISSUE_TEMPLATE/feature_request.md' },
+    { type: 'blob', path: '.github/workflows/ci.yml' },
+    { type: 'blob', path: '.github/workflows/release.yml' },
+    { type: 'blob', path: 'src/index.ts' },
+    { type: 'blob', path: 'src/utils/helpers.ts' },
+    { type: 'blob', path: 'configs/tsconfig.json' },
+    { type: 'blob', path: 'configs/nested/config.json' },
+    { type: 'tree', path: 'src' }, // Directory, should be filtered out
+    { type: 'tree', path: '.github' }, // Directory, should be filtered out
+  ];
+
+  return {
+    mockRepos: {
+      get: vi.fn(() => Promise.resolve({ data: { default_branch: 'main' } })),
+    },
+    mockGit: {
+      getRef: vi.fn(() =>
+        Promise.resolve({ data: { object: { sha: 'abc123' } } }),
+      ),
+      getTree: vi.fn(() => Promise.resolve({ data: { tree: defaultTree } })),
+      getCommit: vi.fn(),
+    },
+  };
+});
+
 // Mock @octokit/rest
 vi.mock('@octokit/rest', () => ({
   Octokit: class {
-    repos = {
-      get: vi.fn().mockResolvedValue({
-        data: { default_branch: 'main' },
-      }),
-    };
-    git = {
-      getRef: vi.fn().mockResolvedValue({
-        data: { object: { sha: 'abc123' } },
-      }),
-      getTree: vi.fn().mockResolvedValue({
-        data: {
-          tree: [
-            { type: 'blob', path: '.eslintrc.js' },
-            { type: 'blob', path: '.prettierrc' },
-            { type: 'blob', path: '.github/ISSUE_TEMPLATE/bug_report.md' },
-            { type: 'blob', path: '.github/ISSUE_TEMPLATE/feature_request.md' },
-            { type: 'blob', path: '.github/workflows/ci.yml' },
-            { type: 'blob', path: '.github/workflows/release.yml' },
-            { type: 'blob', path: 'src/index.ts' },
-            { type: 'blob', path: 'src/utils/helpers.ts' },
-            { type: 'blob', path: 'configs/tsconfig.json' },
-            { type: 'blob', path: 'configs/nested/config.json' },
-            { type: 'tree', path: 'src' }, // Directory, should be filtered out
-            { type: 'tree', path: '.github' }, // Directory, should be filtered out
-          ],
-        },
-      }),
-    };
+    repos = mockRepos;
+    git = mockGit;
   },
 }));
 
@@ -81,7 +89,7 @@ describe('isGlobPattern', () => {
 describe('listFilesMatchingGlob', () => {
   beforeEach(() => {
     clearBranchCache();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('matches files with single asterisk wildcard', async () => {
@@ -170,5 +178,116 @@ describe('listFilesMatchingGlob', () => {
     // Results should be sorted alphabetically
     const sorted = [...files].sort();
     expect(files).toEqual(sorted);
+  });
+
+  it('resolves the default branch when no ref is given', async () => {
+    const files = await listFilesMatchingGlob(
+      'owner',
+      'repo',
+      'src/*.ts',
+      undefined,
+      'token',
+    );
+
+    // The repo's default branch is fetched and then looked up as a branch ref
+    expect(mockRepos.get).toHaveBeenCalledWith({ owner: 'owner', repo: 'repo' });
+    expect(mockGit.getRef).toHaveBeenCalledWith({
+      owner: 'owner',
+      repo: 'repo',
+      ref: 'heads/main',
+    });
+    expect(files).toEqual(['src/index.ts']);
+  });
+
+  it('falls back to a tag ref when the branch ref lookup fails', async () => {
+    // First getRef (heads/v1.0.0) rejects; the tag getRef (tags/v1.0.0) succeeds
+    mockGit.getRef
+      .mockRejectedValueOnce(new Error('Not Found'))
+      .mockResolvedValueOnce({ data: { object: { sha: 'tagsha' } } });
+
+    const files = await listFilesMatchingGlob(
+      'owner',
+      'repo',
+      'src/*.ts',
+      'v1.0.0',
+      'token',
+    );
+
+    expect(mockGit.getRef).toHaveBeenNthCalledWith(1, {
+      owner: 'owner',
+      repo: 'repo',
+      ref: 'heads/v1.0.0',
+    });
+    expect(mockGit.getRef).toHaveBeenNthCalledWith(2, {
+      owner: 'owner',
+      repo: 'repo',
+      ref: 'tags/v1.0.0',
+    });
+    expect(mockGit.getTree).toHaveBeenCalledWith({
+      owner: 'owner',
+      repo: 'repo',
+      tree_sha: 'tagsha',
+      recursive: 'true',
+    });
+    expect(files).toEqual(['src/index.ts']);
+  });
+
+  it('falls back to a commit SHA when neither branch nor tag refs resolve', async () => {
+    // Both branch and tag getRef calls reject, leaving the commit-SHA fallback
+    mockGit.getRef.mockRejectedValue(new Error('Not Found'));
+    mockGit.getCommit.mockResolvedValue({
+      data: { tree: { sha: 'commit-tree-sha' } },
+    });
+
+    const sha = 'a1b2c3d4e5f6';
+    const files = await listFilesMatchingGlob(
+      'owner',
+      'repo',
+      'src/*.ts',
+      sha,
+      'token',
+    );
+
+    expect(mockGit.getCommit).toHaveBeenCalledWith({
+      owner: 'owner',
+      repo: 'repo',
+      commit_sha: sha,
+    });
+    // The tree SHA threaded through to getTree comes from the resolved commit
+    expect(mockGit.getTree).toHaveBeenCalledWith({
+      owner: 'owner',
+      repo: 'repo',
+      tree_sha: 'commit-tree-sha',
+      recursive: 'true',
+    });
+    expect(files).toEqual(['src/index.ts']);
+  });
+});
+
+describe('getDefaultBranch', () => {
+  beforeEach(() => {
+    clearBranchCache();
+    vi.resetAllMocks();
+  });
+
+  it('fetches the default branch from the repo on a cache miss', async () => {
+    mockRepos.get.mockResolvedValue({ data: { default_branch: 'develop' } });
+
+    const branch = await getDefaultBranch('owner', 'repo', 'token');
+
+    expect(branch).toBe('develop');
+    expect(mockRepos.get).toHaveBeenCalledWith({ owner: 'owner', repo: 'repo' });
+  });
+
+  it('serves a cached default branch without a second API call', async () => {
+    mockRepos.get.mockResolvedValue({ data: { default_branch: 'develop' } });
+
+    const first = await getDefaultBranch('owner', 'repo', 'token');
+    const second = await getDefaultBranch('owner', 'repo', 'token');
+
+    expect(first).toBe('develop');
+    expect(second).toBe('develop');
+    // The second call is served from the shared branch cache
+    expect(mockRepos.get).toHaveBeenCalledTimes(1);
   });
 });
