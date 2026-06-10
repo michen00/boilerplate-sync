@@ -200,7 +200,7 @@ This repository includes real, working example workflows that sync multiple file
 - [`.github/workflows/sync-template-non-workflow.yml`](.github/workflows/sync-template-non-workflow.yml) — syncs non-workflow files.
 - [`.github/workflows/sync-template-github-workflows.yml`](.github/workflows/sync-template-github-workflows.yml) — syncs `.github/workflows/*` files (requires additional permissions, as noted above).
 
-You can copy a workflow file and adapt it for your own needs. Simply modify the `sources` configuration to point to your template repository and add or remove files as needed.
+You can copy a workflow file and adapt it for your own needs. Simply modify the `sources` configuration to point to your template repository and add or remove files as needed. Note that these workflows also include repo-local steps (for example, the `./.github/actions/supersede-boilerplate-prs` action) that do not exist outside this repository — remove or replace those steps when adapting a workflow for your own project.
 
 ### Basic Usage
 
