@@ -431,6 +431,7 @@ describe('parseSourcesInput', () => {
         source: 'org/repo1',
         ref: 'main',
         sourceToken: undefined,
+        origin: 'default_files',
       });
       expect(normalized[1]).toEqual({
         local_path: 'file2.js',
@@ -438,6 +439,7 @@ describe('parseSourcesInput', () => {
         source: 'org/repo1',
         ref: 'main',
         sourceToken: undefined,
+        origin: 'default_files',
       });
     });
 
@@ -462,6 +464,7 @@ describe('parseSourcesInput', () => {
         source: 'org/repo1',
         ref: 'main',
         sourceToken: undefined,
+        origin: 'file_pairs',
       });
       expect(normalized[1]).toEqual({
         local_path: 'file2.js',
@@ -469,6 +472,7 @@ describe('parseSourcesInput', () => {
         source: 'org/repo1',
         ref: 'main',
         sourceToken: undefined,
+        origin: 'file_pairs',
       });
     });
 

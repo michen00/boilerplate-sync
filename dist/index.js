@@ -26663,7 +26663,8 @@ function normalizeSources(sources) {
           source_path: filePath,
           source: source.source,
           ref: source.ref,
-          sourceToken: source["source-token"]
+          sourceToken: source["source-token"],
+          origin: "default_files"
         });
       }
     }
@@ -26674,7 +26675,8 @@ function normalizeSources(sources) {
           source_path: file.source_path ?? file.local_path,
           source: source.source,
           ref: source.ref,
-          sourceToken: source["source-token"]
+          sourceToken: source["source-token"],
+          origin: "file_pairs"
         });
       }
     }
@@ -32291,7 +32293,8 @@ function createGitHubSource(source, path3, ref) {
   return new GitHubSource(source, path3, ref);
 }
 function isGlobPattern(path3) {
-  return /[*?[\]{}]/.test(path3);
+  const matcher = new Minimatch(path3, { magicalBraces: true });
+  return matcher.hasMagic() || /\{[^{}]*(?:,|\.\.)[^{}]*\}/.test(path3);
 }
 async function getDefaultBranch(owner, repo, token) {
   const cacheKey = `${owner}/${repo}`;
@@ -32419,6 +32422,11 @@ async function expandGlobPatterns(configs, githubToken) {
     if (!isGlobPattern(config.source_path)) {
       expanded.push(config);
       continue;
+    }
+    if (config.origin === "file_pairs") {
+      throw new ConfigError(
+        `Glob patterns are not supported in \`file_pairs\` (source: '${config.source_path}'); use \`default_files\` for globs.`
+      );
     }
     info(`Expanding glob pattern: ${config.source_path}`);
     const [owner, repo] = config.source.split("/");

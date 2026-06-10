@@ -25,6 +25,12 @@ export interface SourceConfig {
 }
 
 /**
+ * Which configuration block a normalized config was flattened from.
+ * Only `default_files` permits glob patterns; `file_pairs` does not.
+ */
+export type ConfigOrigin = 'default_files' | 'file_pairs';
+
+/**
  * Normalized file sync configuration (internal use)
  * This is the flattened format used by sync logic
  */
@@ -39,6 +45,8 @@ export interface NormalizedFileSyncConfig {
   ref?: string;
   /** Token for accessing this source (undefined means use github-token) */
   sourceToken?: string;
+  /** Which config block this entry came from (gates glob expansion) */
+  origin: ConfigOrigin;
   /** Original glob pattern if this config was expanded from a glob */
   expandedFrom?: string;
 }
