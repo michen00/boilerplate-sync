@@ -433,11 +433,9 @@ describe('syncFiles glob expansion', () => {
 
     // Throw a ConfigError (not a generic Error) so the action entrypoint
     // reports it as a configuration problem rather than an action failure.
-    const error = await syncFiles(filePairsGlobInputs).catch(
-      (e: unknown) => e
-    );
-    expect(error).toBeInstanceOf(ConfigError);
-    expect((error as ConfigError).message).toBe(
+    const syncPromise = syncFiles(filePairsGlobInputs);
+    await expect(syncPromise).rejects.toThrow(ConfigError);
+    await expect(syncPromise).rejects.toThrow(
       "Glob patterns are not supported in `file_pairs` (source: '.github/ISSUE_TEMPLATE/*.md'); use `default_files` for globs."
     );
     // The remapped glob must never reach the tree-listing path.
