@@ -6,17 +6,6 @@ import {
   listFilesMatchingGlob,
 } from '../src/sources/github';
 
-// Shared mock fns so individual tests can drive the ref-resolution fallbacks
-// (per-instance vi.fn()s could not be reconfigured from inside a test).
-const mockRepos = {
-  get: vi.fn(),
-};
-const mockGit = {
-  getRef: vi.fn(),
-  getTree: vi.fn(),
-  getCommit: vi.fn(),
-};
-
 const DEFAULT_TREE = [
   { type: 'blob', path: '.eslintrc.js' },
   { type: 'blob', path: '.prettierrc' },
@@ -32,6 +21,19 @@ const DEFAULT_TREE = [
   { type: 'tree', path: '.github' }, // Directory, should be filtered out
 ];
 
+// Shared mock fns so individual tests can drive the ref-resolution fallbacks
+// (per-instance vi.fn()s could not be reconfigured from inside a test). Each
+// carries its happy-path default in the factory, so vi.resetAllMocks() restores
+// it before every test; fallback tests stack *Once overrides on top.
+const mockRepos = {
+  get: vi.fn(() => Promise.resolve({ data: { default_branch: 'main' } })),
+};
+const mockGit = {
+  getRef: vi.fn(() => Promise.resolve({ data: { object: { sha: 'abc123' } } })),
+  getTree: vi.fn(() => Promise.resolve({ data: { tree: DEFAULT_TREE } })),
+  getCommit: vi.fn(),
+};
+
 // Mock @octokit/rest
 vi.mock('@octokit/rest', () => ({
   Octokit: class {
@@ -39,21 +41,6 @@ vi.mock('@octokit/rest', () => ({
     git = mockGit;
   },
 }));
-
-// Restore the happy-path defaults before each test; tests that exercise the
-// fallback chain override getRef/getCommit with *Once variants on top.
-function resetOctokitMocks(): void {
-  mockRepos.get.mockReset().mockResolvedValue({
-    data: { default_branch: 'main' },
-  });
-  mockGit.getRef.mockReset().mockResolvedValue({
-    data: { object: { sha: 'abc123' } },
-  });
-  mockGit.getTree.mockReset().mockResolvedValue({
-    data: { tree: DEFAULT_TREE },
-  });
-  mockGit.getCommit.mockReset();
-}
 
 describe('isGlobPattern', () => {
   beforeEach(() => {
@@ -97,8 +84,7 @@ describe('isGlobPattern', () => {
 describe('listFilesMatchingGlob', () => {
   beforeEach(() => {
     clearBranchCache();
-    vi.clearAllMocks();
-    resetOctokitMocks();
+    vi.resetAllMocks();
   });
 
   it('matches files with single asterisk wildcard', async () => {
@@ -211,7 +197,6 @@ describe('listFilesMatchingGlob', () => {
   it('falls back to a tag ref when the branch ref lookup fails', async () => {
     // First getRef (heads/v1.0.0) rejects; the tag getRef (tags/v1.0.0) succeeds
     mockGit.getRef
-      .mockReset()
       .mockRejectedValueOnce(new Error('Not Found'))
       .mockResolvedValueOnce({ data: { object: { sha: 'tagsha' } } });
 
@@ -244,7 +229,7 @@ describe('listFilesMatchingGlob', () => {
 
   it('falls back to a commit SHA when neither branch nor tag refs resolve', async () => {
     // Both branch and tag getRef calls reject, leaving the commit-SHA fallback
-    mockGit.getRef.mockReset().mockRejectedValue(new Error('Not Found'));
+    mockGit.getRef.mockRejectedValue(new Error('Not Found'));
     mockGit.getCommit.mockResolvedValue({
       data: { tree: { sha: 'commit-tree-sha' } },
     });
@@ -277,8 +262,7 @@ describe('listFilesMatchingGlob', () => {
 describe('getDefaultBranch', () => {
   beforeEach(() => {
     clearBranchCache();
-    vi.clearAllMocks();
-    resetOctokitMocks();
+    vi.resetAllMocks();
   });
 
   it('fetches the default branch from the repo on a cache miss', async () => {
