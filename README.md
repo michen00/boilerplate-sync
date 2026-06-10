@@ -183,13 +183,13 @@ When a glob pattern matches multiple files, each matched file is synced with `lo
 
 ## Outputs
 
-| Output          | Type     | Description                                                                     |
-| --------------- | -------- | ------------------------------------------------------------------------------- |
-| `has-changes`   | `string` | `"true"` if any files were updated or created, `"false"` otherwise. Always set. |
-| `updated-count` | `string` | Number of files updated or created. Always set.                                 |
-| `failed-count`  | `string` | Number of files that failed to sync. Always set.                                |
-| `skipped-count` | `string` | Number of files skipped (no changes detected). Always set.                      |
-| `summary`       | `JSON`   | Full sync summary with details on each file. Always set.                        |
+| Output          | Type     | Description                                                                                  |
+| --------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `has-changes`   | `string` | `"true"` if any files were updated or created, `"false"` otherwise. Always set.              |
+| `updated-count` | `string` | Number of files updated or created. Always set.                                              |
+| `failed-count`  | `string` | Number of files that failed to sync. Always set.                                             |
+| `skipped-count` | `string` | Number of files skipped (unchanged, or missing when create-missing is disabled). Always set. |
+| `summary`       | `JSON`   | Full sync summary with details on each file. Always set.                                     |
 
 ## Examples
 
