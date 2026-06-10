@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as core from '@actions/core';
 import { createGitHubSource, isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
 import { syncFiles } from '../src/sync';
+import { ConfigError } from '../src/config';
 import type { ActionInputs } from '../src/sources/types';
 
 // Mock fs/promises
@@ -396,7 +397,13 @@ describe('syncFiles glob expansion', () => {
       ],
     };
 
-    await expect(syncFiles(filePairsGlobInputs)).rejects.toThrow(
+    // Throw a ConfigError (not a generic Error) so the action entrypoint
+    // reports it as a configuration problem rather than an action failure.
+    const error = await syncFiles(filePairsGlobInputs).catch(
+      (e: unknown) => e
+    );
+    expect(error).toBeInstanceOf(ConfigError);
+    expect((error as ConfigError).message).toBe(
       "Glob patterns are not supported in `file_pairs` (source: '.github/ISSUE_TEMPLATE/*.md'); use `default_files` for globs."
     );
     // The remapped glob must never reach the tree-listing path.

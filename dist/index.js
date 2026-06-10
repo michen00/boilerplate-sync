@@ -32423,7 +32423,7 @@ async function expandGlobPatterns(configs, githubToken) {
       continue;
     }
     if (config.origin === "file_pairs") {
-      throw new Error(
+      throw new ConfigError(
         `Glob patterns are not supported in \`file_pairs\` (source: '${config.source_path}'); use \`default_files\` for globs.`
       );
     }

@@ -6,7 +6,7 @@ import {
   isGlobPattern,
   listFilesMatchingGlob,
 } from './sources/github';
-import { normalizeSources } from './config';
+import { ConfigError, normalizeSources } from './config';
 import type {
   NormalizedFileSyncConfig,
   SyncResult,
@@ -143,7 +143,7 @@ async function expandGlobPatterns(
     // source_path. In `file_pairs` the explicit local_path would be silently
     // discarded by expansion, so fail fast instead of remapping silently.
     if (config.origin === 'file_pairs') {
-      throw new Error(
+      throw new ConfigError(
         `Glob patterns are not supported in \`file_pairs\` ` +
           `(source: '${config.source_path}'); use \`default_files\` for globs.`
       );
