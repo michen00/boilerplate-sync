@@ -137,10 +137,10 @@ git push origin <branch name>
 
 #### Before opening a Pull Request
 
-- Make sure `npm run type-check` passes without errors
-- Run `npm run test` (or `make test`) to verify tests pass
-- Run `make run-pre-commit` to run the pre-commit checks
-- Run `make check` to run all checks at once (pre-commit, lint, type-check, tests)
+- Run `make check` to run all checks at once (pre-commit, lint, type-check, tests), or run individual checks:
+  - Make sure `npm run type-check` passes without errors
+  - Run `npm run test` (or `make test`) to verify tests pass
+  - Run `make run-pre-commit` to run the pre-commit checks
 - Follow the code standards and conventions of the project
 
 And finally, when you are satisfied with your changes, open a new PR.
