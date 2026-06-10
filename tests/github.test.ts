@@ -175,8 +175,11 @@ describe('GitHubSource', () => {
     });
 
     it('throws error when the file entry carries no content', async () => {
+      // A file entry with no `content` field at all models genuinely missing
+      // content. An empty string is what the Contents API returns for a *valid*
+      // empty file, so asserting it throws would enshrine rejecting empty files.
       mockRepos.getContent.mockResolvedValue({
-        data: { type: 'file', content: '', sha: 'empty' },
+        data: { type: 'file', sha: 'empty' },
       });
 
       const source = createGitHubSource('owner/repo', 'empty.ts', 'main');
