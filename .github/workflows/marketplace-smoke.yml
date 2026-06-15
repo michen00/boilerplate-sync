@@ -28,7 +28,7 @@ jobs:
     steps:
       - name: Consume @v1 (floating alias the README advertises)
         id: v1
-        uses: michen00/boilerplate-sync@v1
+        uses: michen00/boilerplate-sync@v1.0.4
         with:
           sources: |
             - source: actions/checkout
@@ -71,7 +71,7 @@ jobs:
 
       - name: Consume @v1.0.0 (immutable tag)
         id: v100
-        uses: michen00/boilerplate-sync@v1.0.0
+        uses: michen00/boilerplate-sync@v1.0.4
         with:
           sources: |
             - source: actions/checkout
