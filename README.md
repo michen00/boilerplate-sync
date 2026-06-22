@@ -64,7 +64,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Sync boilerplate files
         uses: michen00/boilerplate-sync@v1
@@ -221,7 +221,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Sync boilerplate files
         uses: michen00/boilerplate-sync@v1
         id: sync
