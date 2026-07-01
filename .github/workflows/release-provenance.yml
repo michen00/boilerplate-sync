@@ -45,7 +45,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Checkout the release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # refs/tags/ forces a tag ref -- checkout fails fast if the tag does
           # not exist, so a non-tag ref can never reach the attestation step.

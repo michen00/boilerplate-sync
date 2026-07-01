@@ -16,14 +16,14 @@ jobs:
     name: Pre-commit hooks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install pre-commit
         run: |
           pip install --upgrade pip
           pip install --upgrade pre-commit
       - name: Cache pre-commit hooks
         id: cache-pre-commit-hooks
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         env:
           CACHE_NUMBER: 0
         with:
@@ -39,7 +39,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -64,7 +64,7 @@ jobs:
         if: >-
           github.event_name != 'pull_request' ||
           github.event.pull_request.head.repo.full_name == github.repository
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
@@ -86,7 +86,7 @@ jobs:
     needs: build
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Test action (smoke test)
         uses: ./

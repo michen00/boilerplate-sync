@@ -38,7 +38,7 @@ jobs:
       # from if expressions (actionlint enforces it); hoist presence here.
       APP_KEY_SET: ${{ secrets.APP_PRIVATE_KEY != '' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Dependabot metadata
         if: github.actor == 'dependabot[bot]'
         id: dependabot
@@ -53,7 +53,7 @@ jobs:
           pip install --upgrade pre-commit
       - name: Cache pre-commit hooks
         id: cache-pre-commit-hooks
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         env:
           CACHE_NUMBER: 0
         with:
