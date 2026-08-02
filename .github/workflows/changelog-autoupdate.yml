@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0 # Full history needed for git cliff
       - name: Install git-cliff
-        uses: taiki-e/install-action@v2.85.4
+        uses: taiki-e/install-action@v2
         with:
           # Unpinned: a git-cliff release that changes output may open a
           # one-time reformatting PR, which is this workflow's job anyway.
