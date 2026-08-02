@@ -130,18 +130,51 @@ jobs:
             echo "::info::pre-commit-ci PR, eligible for auto-merge"
             echo "should_merge=true" >> "$GITHUB_OUTPUT"
           fi
-      # No wait step: auto-merge waits for required checks server-side, and
-      # make check above already validated the tree being approved.
+      # The rebuild above pushes a new head, and the ruleset dismisses stale
+      # reviews on push. Approving before the PR object repoints binds the
+      # review to the pre-push SHA, so the dismissal that fires for our own
+      # push immediately voids it -- leaving auto-merge armed behind a
+      # REVIEW_REQUIRED nothing will ever satisfy. Converge on the real tip
+      # first. Git refs are strongly consistent, so the ref API is the source
+      # of truth while the PR object catches up.
+      - name: Wait for the PR head to match the pushed commit
+        id: head
+        if: steps.eligible.outputs.should_merge == 'true'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          TIP=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)
+          echo "::debug::branch tip is $TIP"
+          for _ in $(seq 1 30); do
+            PR_HEAD=$(gh pr view "$PR_NUMBER" --json headRefOid -q .headRefOid)
+            if [ "$PR_HEAD" = "$TIP" ]; then
+              echo "sha=$TIP" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "PR head is $PR_HEAD, waiting for $TIP ..."
+            sleep 5
+          done
+          echo "::error::PR head never converged on $TIP"
+          exit 1
+      # No wait step for checks: auto-merge waits for required checks
+      # server-side, and make check above already validated the tree.
       - name: Approve PR
         if: steps.eligible.outputs.should_merge == 'true'
+        env:
+          HEAD_SHA: ${{ steps.head.outputs.sha }}
         run: |
           REVIEW_STATE=$(gh pr view "$PR_NUMBER" --json reviewDecision -q .reviewDecision)
-          if [ "$REVIEW_STATE" != "APPROVED" ]; then
-            echo "::info::Approving PR..."
-            gh pr review --approve "$PR_NUMBER"
-          else
+          if [ "$REVIEW_STATE" = "APPROVED" ]; then
             echo "::info::PR already approved."
+            exit 0
           fi
+          echo "::info::Approving $HEAD_SHA ..."
+          # Pin the review to the exact head. An approval bound to the current
+          # head is not stale, so dismiss_stale_reviews_on_push leaves it be.
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" \
+            -f "commit_id=$HEAD_SHA" \
+            -f 'event=APPROVE' \
+            -f 'body=Automated approval: make check passed on this commit.'
       - name: Enable auto-merge
         if: steps.eligible.outputs.should_merge == 'true'
         run: |
