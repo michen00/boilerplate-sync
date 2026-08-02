@@ -23,7 +23,7 @@ jobs:
       BRANCH_NAME: chore/sync-boilerplate-workflows/${{ github.run_id }}
       COMMIT_MESSAGE: 'chore: auto-sync boilerplate files'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Sync files
