@@ -6,6 +6,8 @@ All notable changes will be documented in this file. See [conventional commits](
 
 The format is based on [Keep a Changelog](https://keepachangelog.com) and this project adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
 ## [1.0.1](https://github.com/michen00/boilerplate-sync/compare/v1.0.0..v1.0.1) - 2026-06-09
 
 ### ✨ Features
