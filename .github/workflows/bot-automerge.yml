@@ -21,7 +21,17 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: bot-automerge-${{ github.event.pull_request.number }}
+  # Keyed by actor as well as PR. The dist rebuild below pushes with an App
+  # token, and that push re-fires pull_request/synchronize under a *different*
+  # actor. On a PR-only key that run joins this run's group and cancels us
+  # mid-flight, while the actor gate on the job below skips the replacement --
+  # so approval and auto-merge never run for anyone. It happened on every dist
+  # push observed: run 30679210030 was cancelled by 30679291569 (actor
+  # boilerplate-sync-bot[bot], conclusion skipped) 5s after its own push.
+  # Same-actor supersession still collapses, which is what cancel-in-progress
+  # is here for: the opened/labeled event burst and dependabot's own rebase
+  # force-push both arrive as dependabot[bot].
+  group: bot-automerge-${{ github.event.pull_request.number }}-${{ github.actor }}
   cancel-in-progress: true
 
 jobs:
