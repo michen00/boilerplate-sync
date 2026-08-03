@@ -145,15 +145,20 @@ jobs:
       # review to the pre-push SHA, so the dismissal that fires for our own
       # push immediately voids it -- leaving auto-merge armed behind a
       # REVIEW_REQUIRED nothing will ever satisfy. Converge on the real tip
-      # first. Git refs are strongly consistent, so the ref API is the source
-      # of truth while the PR object catches up.
+      # first. Git refs are strongly consistent, so the ref store is the
+      # source of truth while the PR object catches up.
       - name: Wait for the PR head to match the pushed commit
         id: head
         if: steps.eligible.outputs.should_merge == 'true'
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          TIP=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)
+          # Read the tip through git rather than a REST path. Ref names may
+          # legally contain '#' and '%' (git check-ref-format allows both),
+          # which a URL path segment would truncate or misdecode into a
+          # different ref. ls-remote transfers no objects, so the shallow
+          # clone and update-local:false do not matter here.
+          TIP=$(git ls-remote --exit-code origin "refs/heads/${HEAD_REF}" | cut -f1)
           echo "::debug::branch tip is $TIP"
           for _ in $(seq 1 30); do
             PR_HEAD=$(gh pr view "$PR_NUMBER" --json headRefOid -q .headRefOid)
