@@ -6,7 +6,7 @@
 
 **Goal:** Replace the five-step manual release with release-please maintaining a single release PR, plus a workflow job that creates the annotated tag, moves the `v1` alias, and publishes the GitHub Release.
 
-**Architecture:** `release-please-action@v4` runs on every push to `main` in PR-only mode (`skip-github-release: true`), maintaining one open `chore(main): release X.Y.Z` PR. Merging that PR is the only human step. A later step in the same workflow compares `.release-please-manifest.json` against existing tags; when the manifest is ahead, it creates an annotated tag, force-moves the major alias, and publishes the release with notes sliced out of `CHANGELOG.md`.
+**Architecture:** `release-please-action@v4` runs on every push to `main` in PR-only mode (`skip-github-release: true`), maintaining one open `chore(main): release X.Y.Z` PR. Merging that PR is the only human step. A later step in the same workflow checks whether the version in `.release-please-manifest.json` already has a published GitHub Release; when it does not, it creates an annotated tag, force-moves the major alias, and then publishes the release with notes sliced out of `CHANGELOG.md` — in that order, so the guard's key is the last side effect and any partial failure retries cleanly.
 
 **Tech Stack:** GitHub Actions, `googleapis/release-please-action@v4`, `actions/create-github-app-token@v3`, `gh` CLI, `jq`, `awk`, pre-commit (prettier / markdownlint / actionlint / yamllint / gitlint).
 
@@ -439,8 +439,10 @@ Expected: `0`. The workflow step below turns that empty result into a hard failu
 Add these to the end of the `release` job, after the "Maintain the release PR" step:
 
 ```text
-      - name: Decide whether a tag is due
+      - name: Decide whether a release is due
         id: due
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           VERSION=$(jq -r '.["."] // empty' .release-please-manifest.json)
           if [ -z "$VERSION" ]; then
@@ -449,14 +451,18 @@ Add these to the end of the `release` job, after the "Maintain the release PR" s
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
-          # Keyed on manifest-vs-tag rather than the release PR's title, so
-          # re-runs and workflow_dispatch are both safe and we do not depend on
-          # release-please's "chore(main): release X" convention holding.
-          if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
-            echo "::notice::v${VERSION} is already tagged; nothing to release."
+          # Key on the LAST side effect this job performs -- the published
+          # release -- not the first. Keying on tag existence would latch the
+          # guard off the moment the tag lands, so a later failure (publish, or
+          # the alias move) would leave v1.0.5 tagged with no release while
+          # every re-run reported "already tagged, nothing to do" and stayed
+          # green. release-tags-protect blocks deletion of v*.*.* and the App
+          # is not a bypass actor, so unwedging that needs an admin.
+          if gh release view "v${VERSION}" > /dev/null 2>&1; then
+            echo "::notice::v${VERSION} is already released; nothing to do."
             echo "due=false" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::v${VERSION} is not tagged yet; releasing."
+            echo "::notice::v${VERSION} has no release yet; releasing."
             echo "due=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -465,7 +471,11 @@ Add these to the end of the `release` job, after the "Maintain the release PR" s
         env:
           VERSION: ${{ steps.due.outputs.version }}
         run: |
-          # Literal prefix match, so the version's dots need no escaping.
+          # Deliberately before any mutating step: a changelog-shape problem
+          # then fails with zero side effects and re-runs cleanly.
+          # Literal prefix match, so the version's dots need no escaping. The
+          # closing ] is load-bearing -- "## [1.0.5]" cannot prefix
+          # "## [1.0.50](".
           awk -v needle="## [${VERSION}]" '
             index($0, needle) == 1 { inside = 1; next }
             inside && /^## / { exit }
@@ -475,36 +485,53 @@ Add these to the end of the `release` job, after the "Maintain the release PR" s
             echo "::error::no '## [${VERSION}]' section found in CHANGELOG.md"
             exit 1
           fi
-          echo '::group::release notes'
-          cat release-notes.md
-          echo '::endgroup::'
+          wc -l < release-notes.md | xargs echo '::notice::release notes lines:'
 
-      - name: Tag the release and move the major alias
+      - name: Tag the release
+        if: steps.due.outputs.due == 'true'
+        env:
+          VERSION: ${{ steps.due.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email \
+            '41898282+github-actions[bot]@users.noreply.github.com'
+          # Idempotent, because a re-run after a mid-job failure must not abort
+          # here. fetch-depth: 0 brings tags down, so the tag may already exist
+          # locally; an identical ref makes the push a no-op, and the ruleset
+          # blocks *updates* to v*.*.*, which an identical ref is not.
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
+            echo "::notice::tag v${VERSION} already exists; pushing is a no-op."
+          else
+            git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          fi
+          git push origin "refs/tags/v${VERSION}"
+
+      - name: Move the major alias
         if: steps.due.outputs.due == 'true'
         env:
           VERSION: ${{ steps.due.outputs.version }}
           MAJOR: ${{ steps.due.outputs.major }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email \
-            '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag -a "v${VERSION}" -m "Release v${VERSION}"
-          # The alias is a moving pointer by design. refs/tags/vN sits outside
-          # release-tags-protect, which covers refs/tags/v*.*.* only -- two
-          # literal dots, which vN can never match.
+          # Before publishing, so the guard's key (the release) stays the last
+          # thing created. A failure here leaves no release, so the next run
+          # retries the whole trio -- and force-moving is idempotent.
+          # Relies on git config set by the Tag step above, which always runs
+          # first when due.
+          # refs/tags/vN sits outside release-tags-protect, which covers
+          # refs/tags/v*.*.* -- two literal dots, which vN can never match.
           git tag -f -a "v${MAJOR}" -m "Alias for v${VERSION}"
-          git push origin "refs/tags/v${VERSION}"
           git push --force origin "refs/tags/v${MAJOR}"
 
       - name: Publish the GitHub release
         if: steps.due.outputs.due == 'true'
         env:
           # App token, not GITHUB_TOKEN: a release created by GITHUB_TOKEN does
-          # not emit release:published, so release-provenance.yml would silently
-          # stop attesting dist/index.js with no error anywhere.
+          # not emit release:published, so release-provenance.yml would
+          # silently stop attesting dist/index.js with no error anywhere.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.due.outputs.version }}
         run: |
+          # The last durable side effect, and the guard's key -- see Decide.
           # --verify-tag refuses to invent a lightweight tag if the push above
           # did not land.
           gh release create "v${VERSION}" \
@@ -514,9 +541,7 @@ Add these to the end of the `release` job, after the "Maintain the release PR" s
 
       # README pins a release SHA in its Security example. That workflow runs on
       # a Monday cron, so without this nudge the example lags a release by up to
-      # a week.
-      # Cosmetic, so never fail a published release over it: if the App lacks
-      # Actions:write this step errors and the release still stands.
+      # a week. Cosmetic, so never fail a published release over it.
       - name: Refresh README version pins
         if: steps.due.outputs.due == 'true'
         continue-on-error: true
@@ -533,17 +558,19 @@ Expected: all Passed. `shellcheck` does not inspect `run:` blocks, but `actionli
 
 - [ ] **Step 5: Confirm the idempotency guard reads correctly**
 
-Simulate both branches locally against the real manifest and tags:
+Simulate the guard locally against the real manifest and the real releases:
 
 ```bash
 VERSION=$(jq -r '.["."] // empty' .release-please-manifest.json)
 echo "manifest=$VERSION major=${VERSION%%.*}"
-git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null \
-  && echo "due=false (expected: v1.0.4 exists)" \
+gh release view "v${VERSION}" > /dev/null 2>&1 \
+  && echo "due=false (expected: v1.0.4 is released)" \
   || echo "due=true"
 ```
 
-Expected: `manifest=1.0.4 major=1` and `due=false`, because `v1.0.4` is already tagged. This is exactly the no-op path every non-release push takes.
+Expected: `manifest=1.0.4 major=1` and `due=false`, because `v1.0.4` has a published release. This is exactly the no-op path every non-release push takes.
+
+**Why the guard keys on the release and not the tag.** The tag is the _first_ durable side effect; the release is the _last_. Keying on the tag latches the guard off the instant the tag lands, so a failure in either later step — the alias move or the publish — leaves `v1.0.5` tagged with no release, and every subsequent run reports "already tagged, nothing to do" while exiting green. Nothing would ever publish it, `release-provenance.yml` would never fire, and `release-tags-protect` blocks deleting `v*.*.*` with the App absent from `bypass_actors`, so only an admin could unstick it. Keying on the last side effect makes every partial failure retry the whole trio, which is why the tag step is written to be idempotent and the alias move is a force-move.
 
 - [ ] **Step 6: Commit**
 
