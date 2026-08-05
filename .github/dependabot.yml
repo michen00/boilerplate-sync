@@ -31,4 +31,9 @@ updates:
       # Parity with the npm ecosystem above. Without it #160's four majors,
       # including a two-major codecov jump, arrived the day after publication
       # with no soak time.
-      semver-major-days: 30
+      #
+      # default-days, not semver-major-days: GitHub rejects the semver-* keys
+      # for this ecosystem ("not supported for the package ecosystem
+      # 'github-actions'"), which invalidated the whole file and got the
+      # github-actions entry -- ignore rules and grouping included -- dropped.
+      default-days: 30
