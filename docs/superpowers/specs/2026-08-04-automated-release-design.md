@@ -210,6 +210,7 @@ version that stops drifting.
 | File                                               | Change                                                                    |
 | -------------------------------------------------- | ------------------------------------------------------------------------- |
 | `CHANGELOG.md`                                     | Fully regenerated in release-please format; extend markdownlint directive |
+| `.prettierignore`                                  | Add `CHANGELOG.md` so prettier stops rewriting generated output           |
 | `.github/workflows/sync-template-non-workflow.yml` | Remove the `scripts/update-unreleased.sh` entry                           |
 | `Makefile`                                         | Retire the `release` target                                               |
 
@@ -225,19 +226,29 @@ version that stops drifting.
 machinery is template-synced; `cliff.toml` and `changelog-autoupdate.yml` are
 bs-local. The 28-test suite for the script lives in template and stays there.
 
-## Blocker: markdownlint rejects release-please output
+## Blocker: two formatting hooks reject release-please output
 
-`.markdownlint.yml` sets `default: true`, so `MD004` (`ul-style: dash`) and `MD012`
-(`no-multiple-blanks`) are both active. release-please emits `*` bullets and two blank
-lines after the version heading. `Pre-commit hooks` is a **required status check** on
-`main`, so the release PR would fail CI and could never be merged.
+release-please emits `*` bullets and **two** blank lines after each heading. Two
+pre-commit hooks object, and `Pre-commit hooks` is a **required status check** on `main`,
+so an unfixed release PR fails CI and can never be merged. A hook that _modifies_ a file
+fails, so autofixing hooks are as blocking as reporting ones.
 
-Fix in keeping with what the file already does — line 1 of `CHANGELOG.md` currently
-suppresses one rule; extend it:
+1. **markdownlint** — `.markdownlint.yml` sets `default: true`, so `MD004`
+   (`ul-style: dash`) and `MD012` (`no-multiple-blanks`) are both active, and the hook
+   runs with `--fix`. Line 1 of `CHANGELOG.md` already suppresses one rule; extend it:
 
-```markdown
-<!-- markdownlint-configure-file { "no-duplicate-heading": false, "ul-style": false, "no-multiple-blanks": false } -->
-```
+   ```markdown
+   <!-- markdownlint-configure-file { "no-duplicate-heading": false, "ul-style": false, "no-multiple-blanks": false } -->
+   ```
+
+2. **prettier** — runs on all markdown (`types_or` includes `markdown`) and
+   `.prettierignore` contains only `dist`. It collapses consecutive blank lines and
+   **does not read markdownlint directives**, so the fix above does nothing for it. Add
+   `CHANGELOG.md` to `.prettierignore`.
+
+Both are required. Fixing only markdownlint leaves prettier rewriting the file on every
+release PR. release-please exposes no setting for bullet character or blank-line count,
+so exempting the file is the only route.
 
 ## One-time migration
 
@@ -265,7 +276,7 @@ consistent going forward. Derived from history:
 
 | release         | releasable commits                               |
 | --------------- | ------------------------------------------------ |
-| `1.0.0`         | 6 `feat` (3 of them `feat!` breaking) + 4 `fix`  |
+| `1.0.0`         | 7 `feat` (3 of them `feat!` breaking) + 4 `fix`  |
 | `1.0.1`         | 1 `feat(ci)` + 2 `fix`                           |
 | `1.0.2` `1.0.3` | none — release-please would never have cut these |
 | `1.0.4`         | 1 `fix(sync)` (#120)                             |
