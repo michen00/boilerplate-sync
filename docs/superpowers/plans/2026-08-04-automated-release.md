@@ -23,6 +23,12 @@
 - **Do not modify `michen00/template`.** Only `scripts/update-unreleased.sh` is synced from it; the fix is to stop syncing it, locally.
 - **Do not alter existing tags or GitHub Releases.** `1.0.0`–`1.0.4` stay exactly as published.
 - Work on a branch off `main`; never commit directly to `main`.
+- **Blocks whose exact bytes matter use a ` ```text ` fence on purpose.** prettier
+  formats fenced blocks in languages it recognizes — including `markdown` and `yaml` —
+  and it runs on this plan. An earlier revision used ` ```markdown ` for the
+  `CHANGELOG.md` content and ` ```yaml ` for Task 4's append fragment; prettier
+  rewrote `*` bullets to `-`, collapsed the deliberate double blank lines, and stripped
+  Task 4's six-space indent down to column 0. Do not "fix" these fences back.
 
 ---
 
@@ -90,7 +96,7 @@ Replace the entire file with exactly this. The markdownlint directive on line 1 
 
 Ordering within each section is scope-then-subject (unscoped entries first, then scopes alphabetically), matching conventional-changelog's default `commitsSort`. Byte-identical reproduction of a hypothetical release-please run is not the goal — format consistency going forward is.
 
-```markdown
+```text
 <!-- markdownlint-configure-file { "no-duplicate-heading": false, "ul-style": false, "no-multiple-blanks": false } -->
 
 # Changelog
@@ -101,45 +107,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com) and this p
 
 ## [1.0.4](https://github.com/michen00/boilerplate-sync/compare/v1.0.3...v1.0.4) (2026-06-10)
 
+
 ### Bug Fixes
 
-- **sync:** reject globs in file_pairs sources ([#120](https://github.com/michen00/boilerplate-sync/issues/120)) ([8d0f88d](https://github.com/michen00/boilerplate-sync/commit/8d0f88d0b39b66b59500e14a3ef9f24268695a27))
+* **sync:** reject globs in file_pairs sources ([#120](https://github.com/michen00/boilerplate-sync/issues/120)) ([8d0f88d](https://github.com/michen00/boilerplate-sync/commit/8d0f88d0b39b66b59500e14a3ef9f24268695a27))
 
 ## [1.0.1](https://github.com/michen00/boilerplate-sync/compare/v1.0.0...v1.0.1) (2026-06-09)
 
+
 ### Features
 
-- **ci:** push dist commits via GitHub App token ([#96](https://github.com/michen00/boilerplate-sync/issues/96)) ([64750e0](https://github.com/michen00/boilerplate-sync/commit/64750e0e550788d1b4b59d8db80836140b41e645))
+* **ci:** push dist commits via GitHub App token ([#96](https://github.com/michen00/boilerplate-sync/issues/96)) ([64750e0](https://github.com/michen00/boilerplate-sync/commit/64750e0e550788d1b4b59d8db80836140b41e645))
+
 
 ### Bug Fixes
 
-- resolve post-merge review findings ([#109](https://github.com/michen00/boilerplate-sync/issues/109)) ([683564f](https://github.com/michen00/boilerplate-sync/commit/683564ff069e2f7b8d0434a151c3262ec69a0128))
-- sweep unresolved review threads from #64-#96 ([#97](https://github.com/michen00/boilerplate-sync/issues/97)) ([9f7f96d](https://github.com/michen00/boilerplate-sync/commit/9f7f96d4244e4883ff4caf741b6e045bb9f55ed3))
+* resolve post-merge review findings ([#109](https://github.com/michen00/boilerplate-sync/issues/109)) ([683564f](https://github.com/michen00/boilerplate-sync/commit/683564ff069e2f7b8d0434a151c3262ec69a0128))
+* sweep unresolved review threads from #64-#96 ([#97](https://github.com/michen00/boilerplate-sync/issues/97)) ([9f7f96d](https://github.com/michen00/boilerplate-sync/commit/9f7f96d4244e4883ff4caf741b6e045bb9f55ed3))
 
 ## 1.0.0 (2026-06-04)
 
+
 ### ⚠ BREAKING CHANGES
 
-- remove PR functions
-- remove unused config
-- simplify config
+* remove PR functions
+* remove unused config
+* simplify config
+
 
 ### Features
 
-- add boilerplate ([02052a8](https://github.com/michen00/boilerplate-sync/commit/02052a800e1ad805bd986c0150d0919d41aec327))
-- add glob pattern support for default_files ([c9359cd](https://github.com/michen00/boilerplate-sync/commit/c9359cd89d4bc296377815723c97b16374f07182))
-- implement boilerplate-sync GitHub Action ([1ce78a6](https://github.com/michen00/boilerplate-sync/commit/1ce78a639458ca47e78eaf18755a93a616167a10))
-- remove PR functions ([628239d](https://github.com/michen00/boilerplate-sync/commit/628239d6fe263590165b14e8fc66b6e78c8e19f4))
-- remove unused config ([9a32aed](https://github.com/michen00/boilerplate-sync/commit/9a32aede9fb969fdac3ab165c48cfa661fc151cc))
-- simplify config ([ec19e37](https://github.com/michen00/boilerplate-sync/commit/ec19e3794466d2b09949049b972cb63cb7501d58))
-- supersede pending PRs ([#64](https://github.com/michen00/boilerplate-sync/issues/64)) ([d54489b](https://github.com/michen00/boilerplate-sync/commit/d54489b99eb0b0d9442aaaae1fa299bdd30485e4))
+* add boilerplate ([02052a8](https://github.com/michen00/boilerplate-sync/commit/02052a800e1ad805bd986c0150d0919d41aec327))
+* add glob pattern support for default_files ([c9359cd](https://github.com/michen00/boilerplate-sync/commit/c9359cd89d4bc296377815723c97b16374f07182))
+* implement boilerplate-sync GitHub Action ([1ce78a6](https://github.com/michen00/boilerplate-sync/commit/1ce78a639458ca47e78eaf18755a93a616167a10))
+* remove PR functions ([628239d](https://github.com/michen00/boilerplate-sync/commit/628239d6fe263590165b14e8fc66b6e78c8e19f4))
+* remove unused config ([9a32aed](https://github.com/michen00/boilerplate-sync/commit/9a32aede9fb969fdac3ab165c48cfa661fc151cc))
+* simplify config ([ec19e37](https://github.com/michen00/boilerplate-sync/commit/ec19e3794466d2b09949049b972cb63cb7501d58))
+* supersede pending PRs ([#64](https://github.com/michen00/boilerplate-sync/issues/64)) ([d54489b](https://github.com/michen00/boilerplate-sync/commit/d54489b99eb0b0d9442aaaae1fa299bdd30485e4))
+
 
 ### Bug Fixes
 
-- add missing composite ([de0b167](https://github.com/michen00/boilerplate-sync/commit/de0b1673b9c46e5c233c1c2a8a4e31ee16b98f25))
-- **action.yml:** escape the dollar sign ([9e27ec9](https://github.com/michen00/boilerplate-sync/commit/9e27ec97afeb16eee93926fefebc1aca32aebcfa))
-- **ci:** repair bot-automerge dist commit flow ([#92](https://github.com/michen00/boilerplate-sync/issues/92)) ([9e29a74](https://github.com/michen00/boilerplate-sync/commit/9e29a74ee26b003e0efe02ba0154f280bfe6c817))
-- **ci:** tolerate check-run lag after CI dispatch ([#94](https://github.com/michen00/boilerplate-sync/issues/94)) ([e644bad](https://github.com/michen00/boilerplate-sync/commit/e644bad4059d0ceb22cef24d5e1d616ebf0b714a))
+* add missing composite ([de0b167](https://github.com/michen00/boilerplate-sync/commit/de0b1673b9c46e5c233c1c2a8a4e31ee16b98f25))
+* **action.yml:** escape the dollar sign ([9e27ec9](https://github.com/michen00/boilerplate-sync/commit/9e27ec97afeb16eee93926fefebc1aca32aebcfa))
+* **ci:** repair bot-automerge dist commit flow ([#92](https://github.com/michen00/boilerplate-sync/issues/92)) ([9e29a74](https://github.com/michen00/boilerplate-sync/commit/9e29a74ee26b003e0efe02ba0154f280bfe6c817))
+* **ci:** tolerate check-run lag after CI dispatch ([#94](https://github.com/michen00/boilerplate-sync/issues/94)) ([e644bad](https://github.com/michen00/boilerplate-sync/commit/e644bad4059d0ceb22cef24d5e1d616ebf0b714a))
 ```
 
 `1.0.2` and `1.0.3` are intentionally absent — those ranges contained only `chore`/`ci`/`docs` commits, so release-please would never have produced sections for them. Their tags and GitHub Releases are untouched.
@@ -403,91 +415,91 @@ Expected: `0`. The workflow step below turns that empty result into a hard failu
 
 Add these to the end of the `release` job, after the "Maintain the release PR" step:
 
-```yaml
-- name: Decide whether a tag is due
-  id: due
-  run: |
-    VERSION=$(jq -r '.["."] // empty' .release-please-manifest.json)
-    if [ -z "$VERSION" ]; then
-      echo "::error::no '.' version in .release-please-manifest.json"
-      exit 1
-    fi
-    echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-    echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
-    # Keyed on manifest-vs-tag rather than the release PR's title, so
-    # re-runs and workflow_dispatch are both safe and we do not depend on
-    # release-please's "chore(main): release X" convention holding.
-    if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
-      echo "::notice::v${VERSION} is already tagged; nothing to release."
-      echo "due=false" >> "$GITHUB_OUTPUT"
-    else
-      echo "::notice::v${VERSION} is not tagged yet; releasing."
-      echo "due=true" >> "$GITHUB_OUTPUT"
-    fi
+```text
+      - name: Decide whether a tag is due
+        id: due
+        run: |
+          VERSION=$(jq -r '.["."] // empty' .release-please-manifest.json)
+          if [ -z "$VERSION" ]; then
+            echo "::error::no '.' version in .release-please-manifest.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
+          # Keyed on manifest-vs-tag rather than the release PR's title, so
+          # re-runs and workflow_dispatch are both safe and we do not depend on
+          # release-please's "chore(main): release X" convention holding.
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
+            echo "::notice::v${VERSION} is already tagged; nothing to release."
+            echo "due=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::v${VERSION} is not tagged yet; releasing."
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          fi
 
-- name: Extract release notes
-  if: steps.due.outputs.due == 'true'
-  env:
-    VERSION: ${{ steps.due.outputs.version }}
-  run: |
-    # Literal prefix match, so the version's dots need no escaping.
-    awk -v needle="## [${VERSION}]" '
-      index($0, needle) == 1 { inside = 1; next }
-      inside && /^## / { exit }
-      inside { print }
-    ' CHANGELOG.md > release-notes.md
-    if [ ! -s release-notes.md ]; then
-      echo "::error::no '## [${VERSION}]' section found in CHANGELOG.md"
-      exit 1
-    fi
-    echo '::group::release notes'
-    cat release-notes.md
-    echo '::endgroup::'
+      - name: Extract release notes
+        if: steps.due.outputs.due == 'true'
+        env:
+          VERSION: ${{ steps.due.outputs.version }}
+        run: |
+          # Literal prefix match, so the version's dots need no escaping.
+          awk -v needle="## [${VERSION}]" '
+            index($0, needle) == 1 { inside = 1; next }
+            inside && /^## / { exit }
+            inside { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::no '## [${VERSION}]' section found in CHANGELOG.md"
+            exit 1
+          fi
+          echo '::group::release notes'
+          cat release-notes.md
+          echo '::endgroup::'
 
-- name: Tag the release and move the major alias
-  if: steps.due.outputs.due == 'true'
-  env:
-    VERSION: ${{ steps.due.outputs.version }}
-    MAJOR: ${{ steps.due.outputs.major }}
-  run: |
-    git config user.name 'github-actions[bot]'
-    git config user.email \
-      '41898282+github-actions[bot]@users.noreply.github.com'
-    git tag -a "v${VERSION}" -m "Release v${VERSION}"
-    # The alias is a moving pointer by design. refs/tags/vN sits outside
-    # release-tags-protect, which covers refs/tags/v*.*.* only -- two
-    # literal dots, which vN can never match.
-    git tag -f -a "v${MAJOR}" -m "Alias for v${VERSION}"
-    git push origin "refs/tags/v${VERSION}"
-    git push --force origin "refs/tags/v${MAJOR}"
+      - name: Tag the release and move the major alias
+        if: steps.due.outputs.due == 'true'
+        env:
+          VERSION: ${{ steps.due.outputs.version }}
+          MAJOR: ${{ steps.due.outputs.major }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email \
+            '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          # The alias is a moving pointer by design. refs/tags/vN sits outside
+          # release-tags-protect, which covers refs/tags/v*.*.* only -- two
+          # literal dots, which vN can never match.
+          git tag -f -a "v${MAJOR}" -m "Alias for v${VERSION}"
+          git push origin "refs/tags/v${VERSION}"
+          git push --force origin "refs/tags/v${MAJOR}"
 
-- name: Publish the GitHub release
-  if: steps.due.outputs.due == 'true'
-  env:
-    # App token, not GITHUB_TOKEN: a release created by GITHUB_TOKEN does
-    # not emit release:published, so release-provenance.yml would silently
-    # stop attesting dist/index.js with no error anywhere.
-    GH_TOKEN: ${{ steps.app-token.outputs.token }}
-    VERSION: ${{ steps.due.outputs.version }}
-  run: |
-    # --verify-tag refuses to invent a lightweight tag if the push above
-    # did not land.
-    gh release create "v${VERSION}" \
-      --title "v${VERSION}" \
-      --notes-file release-notes.md \
-      --verify-tag
+      - name: Publish the GitHub release
+        if: steps.due.outputs.due == 'true'
+        env:
+          # App token, not GITHUB_TOKEN: a release created by GITHUB_TOKEN does
+          # not emit release:published, so release-provenance.yml would silently
+          # stop attesting dist/index.js with no error anywhere.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.due.outputs.version }}
+        run: |
+          # --verify-tag refuses to invent a lightweight tag if the push above
+          # did not land.
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file release-notes.md \
+            --verify-tag
 
-# README pins a release SHA in its Security example. That workflow runs on
-# a Monday cron, so without this nudge the example lags a release by up to
-# a week.
-# Cosmetic, so never fail a published release over it: if the App lacks
-# Actions:write this step errors and the release still stands.
-- name: Refresh README version pins
-  if: steps.due.outputs.due == 'true'
-  continue-on-error: true
-  env:
-    GH_TOKEN: ${{ steps.app-token.outputs.token }}
-  run: gh workflow run readme-action-versions.yml
+      # README pins a release SHA in its Security example. That workflow runs on
+      # a Monday cron, so without this nudge the example lags a release by up to
+      # a week.
+      # Cosmetic, so never fail a published release over it: if the App lacks
+      # Actions:write this step errors and the release still stands.
+      - name: Refresh README version pins
+        if: steps.due.outputs.due == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh workflow run readme-action-versions.yml
 ```
 
 - [ ] **Step 4: Verify the workflow still lints**
