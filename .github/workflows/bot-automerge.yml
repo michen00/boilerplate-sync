@@ -269,12 +269,12 @@ jobs:
                 changed=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate \
                   --jq '.[] | .filename, (.previous_filename // empty)')
                 held=$(printf '%s\n' "$changed" \
-                  | grep -cFx -e '.github/workflows/release-provenance.yml' \
+                  | grep -cFx -e '.github/workflows/release.yml' \
+                               -e '.github/workflows/release-provenance.yml' \
                                -e '.github/workflows/marketplace-smoke.yml' \
                                -e '.github/workflows/sync-template-github-workflows.yml' \
                                -e '.github/workflows/sync-template-non-workflow.yml' \
                                -e '.github/workflows/readme-action-versions.yml' \
-                               -e '.github/workflows/changelog-autoupdate.yml' \
                                -e '.github/workflows/pre-commit-autoupdate.yml' \
                                -e '.github/workflows/app-token-check.yml' \
                   || true)
