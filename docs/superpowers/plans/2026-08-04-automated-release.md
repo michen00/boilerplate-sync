@@ -248,7 +248,7 @@ Expected:
 
 - `Would open 1 pull requests`
 - `title: chore(ci/automated-release): release 1.0.5` — the branch name appears in the scope because `--target-branch` is set; on `main` it will read `chore(main): release 1.0.5`
-- `looking for tagName: v1.0.4` — **without** a `boilerplate-sync-` prefix
+- `component:` printed empty, and `Found release for path ., v1.0.4`. Note the healthy run does **not** print a `looking for tagName:` line at all — that line appears only while release-please is still hunting, i.e. in the broken state below. Do not grep for it to confirm success.
 - exactly one `*` bullet in the body: the undici fix, `#168`
 
 Failure signatures and what they mean:
