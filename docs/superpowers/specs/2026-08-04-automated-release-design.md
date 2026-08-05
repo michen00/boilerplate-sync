@@ -41,8 +41,9 @@ Two further symptoms of the manual process:
 ## Non-goals
 
 - Publishing to npm. `package.json` version is repo metadata only.
-- Rewriting historical changelog sections into a new format.
 - Preserving GPG-signed tags (see "Integrity analysis").
+- Altering existing tags or GitHub Releases. Only `CHANGELOG.md` is rewritten; the
+  published releases for `1.0.0`–`1.0.4` stay exactly as they are.
 
 ## Chosen approach
 
@@ -206,11 +207,11 @@ version that stops drifting.
 
 ### Changed
 
-| File                                               | Change                                                                       |
-| -------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `CHANGELOG.md`                                     | Extend markdownlint directive; backfill `## [1.0.4]`; drop `## [Unreleased]` |
-| `.github/workflows/sync-template-non-workflow.yml` | Remove the `scripts/update-unreleased.sh` entry                              |
-| `Makefile`                                         | Retire the `release` target                                                  |
+| File                                               | Change                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| `CHANGELOG.md`                                     | Fully regenerated in release-please format; extend markdownlint directive |
+| `.github/workflows/sync-template-non-workflow.yml` | Remove the `scripts/update-unreleased.sh` entry                           |
+| `Makefile`                                         | Retire the `release` target                                               |
 
 ### Removed
 
@@ -240,22 +241,50 @@ suppresses one rule; extend it:
 
 ## One-time migration
 
-Order matters — the backfill must precede deleting `cliff.toml`.
+`CHANGELOG.md` is **fully regenerated** in release-please's format rather than left with
+a format seam. Because the regeneration derives from `git log` and not from cliff output,
+no step depends on `cliff.toml` still existing, so the order is unconstrained.
 
-1. **Backfill `## [1.0.4]`** into `CHANGELOG.md` from `git cliff` output, while
-   `cliff.toml` still exists. Otherwise #120 is lost from the changelog permanently.
-2. **Delete the `## [Unreleased]` heading.** Nothing maintains it afterwards, and
-   release-please inserts new sections above it, which would strand it at the top forever.
-3. **Extend the markdownlint directive** (above).
-4. **Seed `.release-please-manifest.json`** with `{".": "1.0.4"}`.
-5. Remove `cliff.toml`, `changelog-autoupdate.yml`, `update-unreleased.sh`, the sync-list
+1. **Regenerate `CHANGELOG.md`** from scratch (see below).
+2. **Extend the markdownlint directive** (above).
+3. **Seed `.release-please-manifest.json`** with `{".": "1.0.4"}`.
+4. Remove `cliff.toml`, `changelog-autoupdate.yml`, `update-unreleased.sh`, the sync-list
    entry, and the `Makefile` release target.
-6. Rescope `release-tags-protect`.
+5. Rescope `release-tags-protect` (human step; see "Human prerequisites").
 
-Changelog format changes at the seam: new sections use `### Bug Fixes` and `*` bullets;
-older sections keep cliff's `### 🐛 Fixes` and `-`. Accepted rather than rewriting
-history. `include-commit-authors: true` recovers something close to cliff's Contributors
-list if wanted.
+### Regenerating the changelog
+
+Emit one section per release using release-please's own markup — `##
+[X.Y.Z](compare/vA...vB) (YYYY-MM-DD)` with `...` (three dots, not cliff's `..`),
+`### Features` / `### Bug Fixes` / `### ⚠ BREAKING CHANGES` headings, and `*` bullets of
+the form `* subject ([#NN](issue-url)) ([sha](commit-url))`.
+
+Section membership is `feat`, `fix`, `perf`, `revert`, plus anything marked breaking —
+exactly what release-please treats as releasable, which is what makes the result
+consistent going forward. Derived from history:
+
+| release         | releasable commits                               |
+| --------------- | ------------------------------------------------ |
+| `1.0.0`         | 6 `feat` (3 of them `feat!` breaking) + 4 `fix`  |
+| `1.0.1`         | 1 `feat(ci)` + 2 `fix`                           |
+| `1.0.2` `1.0.3` | none — release-please would never have cut these |
+| `1.0.4`         | 1 `fix(sync)` (#120)                             |
+
+Two deliberate differences from the current file:
+
+- The three `feat!` commits in `1.0.0` move under a `### ⚠ BREAKING CHANGES` heading
+  instead of cliff's inline `❗` prefix inside Features.
+- Two `fix(ci)` commits (#92, #94) that the current `1.0.0` section omits are included.
+  `fix(ci):` has type `fix`, so release-please surfaces it; cliff's `^ci` skip rule
+  matched only the message prefix and never applied.
+
+`1.0.2` and `1.0.3` remain absent, matching both cliff's current output and what
+release-please would have produced — those ranges held no user-visible changes. The tags
+and GitHub Releases for them are untouched.
+
+Author attribution is dropped relative to cliff's `- ([sha](url)) - Michael I Chen`
+format. Set `include-commit-authors: true` in `release-please-config.json` to keep it,
+and apply the same choice to the regenerated historical sections so old and new match.
 
 ## Failure modes
 
@@ -283,8 +312,34 @@ list if wanted.
 
 ## Human prerequisites
 
-1. Rescope `release-tags-protect` as described (repo settings → Rules).
-2. Nothing else. No new secrets; `vars.APP_ID` and `secrets.APP_PRIVATE_KEY` already exist.
+Rescope `release-tags-protect` (ruleset id `17255321`). Nothing else — no new secrets;
+`vars.APP_ID` (3959221) and `secrets.APP_PRIVATE_KEY` already exist.
+
+`PUT` replaces a ruleset wholesale, so every field is restated:
+
+```sh
+gh api -X PUT repos/michen00/boilerplate-sync/rulesets/17255321 --input - <<'JSON'
+{
+  "name": "release-tags-protect",
+  "target": "tag",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/tags/v*.*.*"], "exclude": [] } },
+  "rules": [ { "type": "update" }, { "type": "deletion" } ],
+  "bypass_actors": [
+    { "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" }
+  ]
+}
+JSON
+```
+
+Equivalent in the UI (**Settings → Rules → release-tags-protect**): set the target
+pattern to `refs/tags/v*.*.*`, untick **Restrict creations** and **Require signed
+commits**, leave **Restrict updates** and **Restrict deletions** ticked.
+
+Note that dropping `creation` lets any write-access principal create a `v9.9.9` tag.
+That is the repo owner and the App only, so it is not a practical exposure — but it is
+the one protection genuinely given up here, as distinct from `required_signatures`,
+which enforces nothing today.
 
 ## Open items
 
