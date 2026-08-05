@@ -41,5 +41,6 @@ such as Cursor, GitHub Copilot, Claude, or other automated assistants.
 
 ## Release Notes (only if asked)
 
-- Tags must exist before `make release VERSION=vX.Y.Z`.
-- Releases use `gh release create` with generated notes.
+- Releases are automated by `.github/workflows/release.yml`.
+- The only manual step is approving and merging the `chore(main): release X.Y.Z` PR.
+- Never create tags or releases by hand.
