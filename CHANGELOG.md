@@ -6,6 +6,14 @@ All notable changes will be documented in this file. See [conventional commits](
 
 The format is based on [Keep a Changelog](https://keepachangelog.com) and this project adheres to [Semantic Versioning](https://semver.org).
 
+## [1.0.5](https://github.com/michen00/boilerplate-sync/compare/v1.0.4...v1.0.5) (2026-08-05)
+
+
+### Bug Fixes
+
+* **dependabot:** use a supported cooldown key ([#171](https://github.com/michen00/boilerplate-sync/issues/171)) ([e50baf9](https://github.com/michen00/boilerplate-sync/commit/e50baf9ef4960ebee724914fb99b257aed7abedb))
+* **deps:** bump undici to 6.28.0 ([#168](https://github.com/michen00/boilerplate-sync/issues/168)) ([08a9180](https://github.com/michen00/boilerplate-sync/commit/08a91804dca9ac9e5c9a1d6974a033c24e054121))
+
 ## [1.0.4](https://github.com/michen00/boilerplate-sync/compare/v1.0.3...v1.0.4) (2026-06-10)
 
 
