@@ -439,7 +439,7 @@ Expected: `0`. The workflow step below turns that empty result into a hard failu
 Add these to the end of the `release` job, after the "Maintain the release PR" step:
 
 ```text
-      - name: Decide whether a release is due
+      - name: Decide whether a tag is due
         id: due
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -451,41 +451,26 @@ Add these to the end of the `release` job, after the "Maintain the release PR" s
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
-          # Key on the LAST side effect this job performs -- the published
-          # release -- not the first. Keying on tag existence would latch the
-          # guard off the moment the tag lands, so a later failure (publish, or
-          # the alias move) would leave v1.0.5 tagged with no release while
-          # every re-run reported "already tagged, nothing to do" and stayed
-          # green. release-tags-protect blocks deletion of v*.*.* and the App
-          # is not a bypass actor, so unwedging that needs an admin.
-          if gh release view "v${VERSION}" > /dev/null 2>&1; then
-            echo "::notice::v${VERSION} is already released; nothing to do."
+          # Distinguish "no such release" from "the API call failed". Treating
+          # every non-zero exit as absence would let a transient blip set
+          # due=true on an ordinary push, and the alias move below would then
+          # repoint vN at unreleased code. Only a definitive not-found proceeds;
+          # anything else fails the job loudly.
+          set +e
+          OUT=$(gh release view "v${VERSION}" --json tagName 2>&1)
+          RC=$?
+          set -e
+          if [ "$RC" -eq 0 ]; then
+            echo "::notice::v${VERSION} is already released; nothing to tag."
             echo "due=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::v${VERSION} has no release yet; releasing."
+          elif printf '%s' "$OUT" | grep -qi 'release not found'; then
+            echo "::notice::v${VERSION} has no release yet; tagging."
             echo "due=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Extract release notes
-        if: steps.due.outputs.due == 'true'
-        env:
-          VERSION: ${{ steps.due.outputs.version }}
-        run: |
-          # Deliberately before any mutating step: a changelog-shape problem
-          # then fails with zero side effects and re-runs cleanly.
-          # Literal prefix match, so the version's dots need no escaping. The
-          # closing ] is load-bearing -- "## [1.0.5]" cannot prefix
-          # "## [1.0.50](".
-          awk -v needle="## [${VERSION}]" '
-            index($0, needle) == 1 { inside = 1; next }
-            inside && /^## / { exit }
-            inside { print }
-          ' CHANGELOG.md > release-notes.md
-          if [ ! -s release-notes.md ]; then
-            echo "::error::no '## [${VERSION}]' section found in CHANGELOG.md"
+          else
+            echo "::error::could not determine release state for v${VERSION}"
+            echo "::error::${OUT}"
             exit 1
           fi
-          wc -l < release-notes.md | xargs echo '::notice::release notes lines:'
 
       - name: Tag the release
         if: steps.due.outputs.due == 'true'
@@ -495,10 +480,10 @@ Add these to the end of the `release` job, after the "Maintain the release PR" s
           git config user.name 'github-actions[bot]'
           git config user.email \
             '41898282+github-actions[bot]@users.noreply.github.com'
-          # Idempotent, because a re-run after a mid-job failure must not abort
-          # here. fetch-depth: 0 brings tags down, so the tag may already exist
-          # locally; an identical ref makes the push a no-op, and the ruleset
-          # blocks *updates* to v*.*.*, which an identical ref is not.
+          # Idempotent: a re-run after a mid-job failure must not abort here.
+          # fetch-depth: 0 brings tags down, so the tag may already exist
+          # locally; pushing an identical ref is a no-op, and the ruleset blocks
+          # *updates* to v*.*.*, which an identical ref is not.
           if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
             echo "::notice::tag v${VERSION} already exists; pushing is a no-op."
           else
@@ -512,32 +497,39 @@ Add these to the end of the `release` job, after the "Maintain the release PR" s
           VERSION: ${{ steps.due.outputs.version }}
           MAJOR: ${{ steps.due.outputs.major }}
         run: |
-          # Before publishing, so the guard's key (the release) stays the last
-          # thing created. A failure here leaves no release, so the next run
-          # retries the whole trio -- and force-moving is idempotent.
-          # Relies on git config set by the Tag step above, which always runs
-          # first when due.
+          # Before release-please publishes, so marketplace-smoke.yml -- which
+          # fires on release:published and consumes @v1 -- sees the alias
+          # already moved.
+          # Anchored to the release tag's commit, not HEAD: on a retry HEAD may
+          # have moved past the tag, and @vN must always name the released
+          # commit.
           # refs/tags/vN sits outside release-tags-protect, which covers
           # refs/tags/v*.*.* -- two literal dots, which vN can never match.
-          git tag -f -a "v${MAJOR}" -m "Alias for v${VERSION}"
+          git tag -f -a "v${MAJOR}" -m "Alias for v${VERSION}" \
+            "refs/tags/v${VERSION}^{commit}"
           git push --force origin "refs/tags/v${MAJOR}"
 
-      - name: Publish the GitHub release
-        if: steps.due.outputs.due == 'true'
-        env:
-          # App token, not GITHUB_TOKEN: a release created by GITHUB_TOKEN does
-          # not emit release:published, so release-provenance.yml would
-          # silently stop attesting dist/index.js with no error anywhere.
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          VERSION: ${{ steps.due.outputs.version }}
-        run: |
-          # The last durable side effect, and the guard's key -- see Decide.
-          # --verify-tag refuses to invent a lightweight tag if the push above
-          # did not land.
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --notes-file release-notes.md \
-            --verify-tag
+      # Runs unconditionally, and AFTER the tag exists. Two jobs in one:
+      #   1. createReleases() publishes the GitHub Release for the merged
+      #      release PR. POST /releases attaches to the annotated tag pushed
+      #      above rather than minting a lightweight one, and because the App
+      #      token creates it, release:published fires and
+      #      release-provenance.yml still attests dist/index.js.
+      #   2. createPullRequests() opens or updates the next release PR.
+      # createReleases runs FIRST (release-please-action src/index.ts main()),
+      # which is what makes this ordering work: it clears the
+      # "autorelease: pending" label from the merged release PR before
+      # createPullRequests reads it. Leaving that label set is fatal --
+      # createPullRequests aborts outright while any merged release PR still
+      # carries it, so with skip-github-release the repo would open exactly one
+      # more release PR ever and then go silent, green, forever.
+      - name: Publish the release and refresh the release PR
+        id: release-please
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
 
       # README pins a release SHA in its Security example. That workflow runs on
       # a Monday cron, so without this nudge the example lags a release by up to
@@ -775,3 +767,250 @@ Expected: the run succeeds and no release PR exists. Verified in advance against
 - **The one thing you cannot do yourself** is Step 2 of Task 6. If you lack admin rights, stop and hand that step back.
 - **If a commit is rejected by gitlint for title length,** shorten to ≤50 characters rather than reformatting the body. This happened repeatedly while writing the spec; 51 characters is a hard failure.
 - **If prettier or markdownlint reports "files were modified by this hook,"** that is a failure, not a warning. Re-stage the modified file and commit again.
+
+---
+
+## Post-review revision (supersedes Task 3 Step 1 and Task 4 Step 3)
+
+The final whole-branch review found that `skip-github-release: true` disables the
+only code path that clears release-please's `autorelease: pending` label, and
+`createPullRequests()` aborts while any merged release PR still carries it. The repo
+would therefore open exactly one more release PR ever and then go silent — green,
+forever. The architecture changed in response: release-please now publishes the
+Release itself and keeps its own bookkeeping, while we pre-create the annotated tag so
+the Release attaches to it.
+
+`createReleases()` runs **before** `createPullRequests()` in the action's `main()`, so
+the label is cleared before it is read — a single run both publishes and opens the next
+PR, with no delay.
+
+This is the complete, final `.github/workflows/release.yml`. Replace the file wholesale.
+
+```text
+---
+name: Release
+
+# release-please maintains a single release PR (version bump + CHANGELOG +
+# manifest). Merging that PR is the only human step in a release.
+#
+# We create the annotated tag ourselves, before release-please runs, because
+# release-please publishes via POST /releases, which mints a *lightweight* tag
+# when none exists -- verified across googleapis/release-please,
+# release-please-action and nodejs-storage. Pre-creating it means the Release
+# attaches to a real annotated tag object instead.
+#
+# release-please still creates the Release, deliberately. Taking that over with
+# skip-github-release also disables the only code path that clears its
+# "autorelease: pending" label, and createPullRequests() aborts while any merged
+# release PR still carries it -- so the repo would open one more release PR ever
+# and then stop, silently and green.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Every mutating call below passes the App token explicitly, so the ambient
+# token needs nothing beyond reading the checkout.
+permissions:
+  contents: read
+
+# Never cancel in progress: a run killed between the tag push and the release
+# creation would leave a tag with no release behind it. Queue instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # secrets aren't allowed in if: expressions (actionlint enforces it);
+  # hoist presence here.
+  APP_KEY_SET: ${{ secrets.APP_PRIVATE_KEY != '' }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Tagging and moving vN must only ever happen from the default branch. A
+    # workflow_dispatch aimed at a feature branch would otherwise tag that
+    # branch and drag vN -- which every consumer of this action follows -- onto
+    # it. release-provenance.yml guards the same class of dispatch-ref abuse.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      # Fail loudly rather than falling back to GITHUB_TOKEN. Other workflows
+      # here degrade gracefully because their PRs can still be merged by hand,
+      # but a release PR opened by GITHUB_TOKEN gets no check runs at all, and
+      # main-protect requires three -- so it could never be merged by anyone.
+      # An immediate error beats a permanently stuck PR. Mirrors the guard in
+      # app-token-check.yml.
+      - name: Require the App credential
+        env:
+          APP_ID: ${{ vars.APP_ID }}
+        run: |
+          if [ -z "$APP_ID" ] || [ "$APP_KEY_SET" != "true" ]; then
+            echo "::error::Set vars.APP_ID and secrets.APP_PRIVATE_KEY first."
+            echo "::error::A release PR opened by GITHUB_TOKEN receives no"
+            echo "::error::check runs and can never satisfy main-protect."
+            exit 1
+          fi
+
+      # No `if:` guard and no GITHUB_TOKEN fallback below -- the step above
+      # already failed the job if the credential is missing, so a fallback
+      # would only be dead code that misleads the next reader.
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags are needed by the idempotency check
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Decide whether a tag is due
+        id: due
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          VERSION=$(jq -r '.["."] // empty' .release-please-manifest.json)
+          if [ -z "$VERSION" ]; then
+            echo "::error::no '.' version in .release-please-manifest.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
+          # Distinguish "no such release" from "the API call failed". Treating
+          # every non-zero exit as absence would let a transient blip set
+          # due=true on an ordinary push, and the alias move below would then
+          # repoint vN at unreleased code. Only a definitive not-found
+          # proceeds; anything else fails the job loudly.
+          set +e
+          OUT=$(gh release view "v${VERSION}" --json tagName 2>&1)
+          RC=$?
+          set -e
+          if [ "$RC" -eq 0 ]; then
+            echo "::notice::v${VERSION} is already released; nothing to tag."
+            echo "due=false" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$OUT" | grep -qi 'release not found'; then
+            echo "::notice::v${VERSION} has no release yet; tagging."
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::could not determine release state for v${VERSION}"
+            echo "::error::${OUT}"
+            exit 1
+          fi
+
+      - name: Tag the release
+        if: steps.due.outputs.due == 'true'
+        env:
+          VERSION: ${{ steps.due.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email \
+            '41898282+github-actions[bot]@users.noreply.github.com'
+          # Idempotent: a re-run after a mid-job failure must not abort here.
+          # fetch-depth: 0 brings tags down, so the tag may already exist
+          # locally; pushing an identical ref is a no-op, and the ruleset
+          # blocks *updates* to v*.*.*, which an identical ref is not.
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
+            echo "::notice::tag v${VERSION} already exists; push is a no-op."
+          else
+            git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          fi
+          git push origin "refs/tags/v${VERSION}"
+
+      - name: Move the major alias
+        if: steps.due.outputs.due == 'true'
+        env:
+          VERSION: ${{ steps.due.outputs.version }}
+          MAJOR: ${{ steps.due.outputs.major }}
+        run: |
+          # Before release-please publishes, so marketplace-smoke.yml -- which
+          # fires on release:published and consumes @v1 -- sees the alias
+          # already moved.
+          # Anchored to the release tag's commit, not HEAD: on a retry HEAD may
+          # have moved past the tag, and @vN must always name the released
+          # commit.
+          # refs/tags/vN sits outside release-tags-protect, which covers
+          # refs/tags/v*.*.* -- two literal dots, which vN can never match.
+          git tag -f -a "v${MAJOR}" -m "Alias for v${VERSION}" \
+            "refs/tags/v${VERSION}^{commit}"
+          git push --force origin "refs/tags/v${MAJOR}"
+
+      # Unconditional, and after the tag exists. Two jobs in one:
+      #   1. createReleases() publishes the Release for the merged release PR,
+      #      attaching to the annotated tag pushed above. The App token creates
+      #      it, so release:published fires and release-provenance.yml still
+      #      attests dist/index.js.
+      #   2. createPullRequests() opens or updates the next release PR.
+      # createReleases runs FIRST in the action's main(), which is what makes
+      # this ordering work -- it clears "autorelease: pending" before
+      # createPullRequests reads it. See the header comment.
+      - name: Publish the release and refresh the release PR
+        id: release-please
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # README pins a release SHA in its Security example. That workflow runs
+      # on a Monday cron, so without this nudge the example lags a release by
+      # up to a week. Cosmetic, so never fail a published release over it.
+      - name: Refresh README version pins
+        if: steps.due.outputs.due == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh workflow run readme-action-versions.yml
+```
+
+### Documentation the deletions and the ruleset rescope left stale
+
+**`README.md:351`** currently claims, in the Security section consumers read:
+
+> Release tags (`v*`) are signed and protected by a tag ruleset; only the repository
+> owner can create, move, or delete them.
+
+Three parts of that are now false: new tags are annotated but **unsigned**; the ruleset
+covers `refs/tags/v*.*.*`, not `v*`; `creation` is no longer restricted; and the App,
+not only the owner, creates them. Rewrite it to state what is actually true — release
+tags `vX.Y.Z` are immutable (`update` and `deletion` blocked by ruleset), the moving
+`vN` alias is deliberately not, tags are unsigned, and integrity for the consumed
+artifact comes from SLSA build provenance verifiable with
+`gh attestation verify dist/index.js --repo michen00/boilerplate-sync`. Keep the
+existing advice to pin a full commit SHA — that remains sound.
+
+**`AGENTS.md:42-45`** is orphaned by Task 5:
+
+```text
+## Release Notes (only if asked)
+- Tags must exist before `make release VERSION=vX.Y.Z`.
+- Releases use `gh release create` with generated notes.
+```
+
+`make release` no longer exists, and anyone following the second line would hand-publish
+a release that bypasses the pipeline, orphans the manifest, and can leave a lightweight
+tag. Replace it with: releases are automated by `.github/workflows/release.yml`; the only
+manual step is approving and merging the `chore(main): release X.Y.Z` PR; never create
+tags or releases by hand.
+
+**`CLAUDE.md` Gotchas** — add the two non-obvious new conventions. `CHANGELOG.md` is
+generated by release-please and must not be hand-edited, and it is deliberately listed in
+`.prettierignore`: a well-meaning "fix" to its `*` bullets or double blank lines breaks
+the required `Pre-commit hooks` check on every future release PR.
+
+### Task 6 addition: verify the _second_ release
+
+Task 6 as originally written stops after verifying `v1.0.5`, which would have signed off
+on the Critical defect above — it first shows at release two, as an absence. Add a final
+check: after `v1.0.5` is published, confirm the merged release PR no longer carries
+`autorelease: pending`, and that a subsequent releasable commit still opens a new release
+PR.
+
+```bash
+# The merged release PR must have been re-labelled, not left pending.
+gh pr list --state merged --label 'autorelease: pending' --json number
+# Expected: []  -- anything else means releases will stop after this one.
+gh pr list --state merged --label 'autorelease: tagged' --json number,title
+# Expected: the 1.0.5 release PR.
+```
