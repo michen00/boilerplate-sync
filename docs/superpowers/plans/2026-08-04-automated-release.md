@@ -206,11 +206,19 @@ Keep it minimal. `release-type: node` bumps `package.json` and `package-lock.jso
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
     ".": {
-      "release-type": "node"
+      "release-type": "node",
+      "include-component-in-tag": false
     }
   }
 }
 ```
+
+**`include-component-in-tag: false` is load-bearing — do not drop it as noise.** In
+manifest mode it defaults to `true`, which prefixes tags with the `package.json` name.
+release-please then hunts for `boilerplate-sync-v1.0.4`, never finds it, concludes there
+has been no release at all, walks the entire history, hits the three `feat!` commits in
+`1.0.0`, and proposes **`boilerplate-sync-2.0.0`** with every commit ever made in the
+changelog body. Observed directly during implementation, not theorised.
 
 - [ ] **Step 2: Create `.release-please-manifest.json`**
 
@@ -224,17 +232,32 @@ Seed at the current released version so release-please computes `1.0.5` next rat
 
 - [ ] **Step 3: Verify manifest mode reads the config**
 
-This is the real test of this task. Run the dry run **without** `--release-type`, so it must load `release-please-config.json`:
+This is the real test of this task, and it catches more than a typo — it is what exposed the `include-component-in-tag` trap above.
+
+**release-please reads its config from the remote default branch, not your working tree.** These files do not exist on `main` yet, so a plain dry run fails with `ConfigurationError: Missing required manifest config`. Point it at the feature branch instead, which requires the branch to be pushed:
 
 ```bash
+git push -u origin ci/automated-release   # if not already pushed
 npx --yes release-please@latest release-pr --dry-run \
   --repo-url=michen00/boilerplate-sync \
-  --token="$(gh auth token)" 2>&1 | head -30
+  --target-branch=ci/automated-release \
+  --token="$(gh auth token)" 2>&1 | grep -Ei "Would open|title:|tagName|^\* " | head -20
 ```
 
-Expected: `Would open 1 pull requests`, title `chore(main): release 1.0.5`, and a body whose only entry is the undici fix (`#168`). If it instead proposes `1.0.0` or errors about a missing manifest, the config file is not being found — check the filenames are exactly as above at the repo root.
+Expected:
 
-Why `--release-type` is omitted: in `release-please-action@v4`, setting `release-type` makes `loadOrBuildManifest` call `Manifest.fromConfig` and **never read the config file**. Passing it here would test the wrong code path.
+- `Would open 1 pull requests`
+- `title: chore(ci/automated-release): release 1.0.5` — the branch name appears in the scope because `--target-branch` is set; on `main` it will read `chore(main): release 1.0.5`
+- `looking for tagName: v1.0.4` — **without** a `boilerplate-sync-` prefix
+- exactly one `*` bullet in the body: the undici fix, `#168`
+
+Failure signatures and what they mean:
+
+- `looking for tagName: boilerplate-sync-v1.0.4`, or a proposed `2.0.0`, or a body listing the whole history → `include-component-in-tag: false` is missing from the config.
+- `ConfigurationError: Missing required manifest config` → you omitted `--target-branch`, or the branch is not pushed.
+- A proposed `1.0.0` → the manifest is not being read; check the filename is exactly `.release-please-manifest.json` at the repo root.
+
+Why `--release-type` is omitted: in `release-please-action@v4`, setting `release-type` makes `loadOrBuildManifest` call `Manifest.fromConfig` and **never read the config file**. Passing it here would test the wrong code path — and would also mask the component-prefix bug, since inline mode defaults differently.
 
 - [ ] **Step 4: Verify the JSON is valid and formatted**
 
