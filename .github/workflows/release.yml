@@ -77,3 +77,88 @@ jobs:
           manifest-file: .release-please-manifest.json
           # We tag and publish ourselves; see the header comment.
           skip-github-release: true
+
+      - name: Decide whether a tag is due
+        id: due
+        run: |
+          VERSION=$(jq -r '.["."] // empty' .release-please-manifest.json)
+          if [ -z "$VERSION" ]; then
+            echo "::error::no '.' version in .release-please-manifest.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
+          # Keyed on manifest-vs-tag rather than the release PR's title, so
+          # re-runs and workflow_dispatch are both safe and we do not depend on
+          # release-please's "chore(main): release X" convention holding.
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
+            echo "::notice::v${VERSION} is already tagged; nothing to release."
+            echo "due=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::v${VERSION} is not tagged yet; releasing."
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract release notes
+        if: steps.due.outputs.due == 'true'
+        env:
+          VERSION: ${{ steps.due.outputs.version }}
+        run: |
+          # Literal prefix match, so the version's dots need no escaping.
+          awk -v needle="## [${VERSION}]" '
+            index($0, needle) == 1 { inside = 1; next }
+            inside && /^## / { exit }
+            inside { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::no '## [${VERSION}]' section found in CHANGELOG.md"
+            exit 1
+          fi
+          echo '::group::release notes'
+          cat release-notes.md
+          echo '::endgroup::'
+
+      - name: Tag the release and move the major alias
+        if: steps.due.outputs.due == 'true'
+        env:
+          VERSION: ${{ steps.due.outputs.version }}
+          MAJOR: ${{ steps.due.outputs.major }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email \
+            '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          # The alias is a moving pointer by design. refs/tags/vN sits outside
+          # release-tags-protect, which covers refs/tags/v*.*.* only -- two
+          # literal dots, which vN can never match.
+          git tag -f -a "v${MAJOR}" -m "Alias for v${VERSION}"
+          git push origin "refs/tags/v${VERSION}"
+          git push --force origin "refs/tags/v${MAJOR}"
+
+      - name: Publish the GitHub release
+        if: steps.due.outputs.due == 'true'
+        env:
+          # App token, not GITHUB_TOKEN: a release created by GITHUB_TOKEN does
+          # not emit release:published, so release-provenance.yml would silently
+          # stop attesting dist/index.js with no error anywhere.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.due.outputs.version }}
+        run: |
+          # --verify-tag refuses to invent a lightweight tag if the push above
+          # did not land.
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file release-notes.md \
+            --verify-tag
+
+      # README pins a release SHA in its Security example. That workflow runs on
+      # a Monday cron, so without this nudge the example lags a release by up to
+      # a week.
+      # Cosmetic, so never fail a published release over it: if the App lacks
+      # Actions:write this step errors and the release still stands.
+      - name: Refresh README version pins
+        if: steps.due.outputs.due == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh workflow run readme-action-versions.yml
