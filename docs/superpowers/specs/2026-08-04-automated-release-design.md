@@ -54,39 +54,58 @@ job.
 feat/fix merges to main
         ↓
 release.yml  (on: push[main] + workflow_dispatch)
-  googleapis/release-please-action@v4
-    skip-github-release: true
-    config-file / manifest-file        (NO release-type input — see below)
-    token: App installation token
+  job gated on github.ref == refs/heads/main
         ↓
-maintains ONE open PR: chore(main): release 1.0.5
-  package.json               1.0.4 → 1.0.5
-  package-lock.json          1.0.4 → 1.0.5
-  CHANGELOG.md               + ## [1.0.5] section
-  .release-please-manifest.json
+  googleapis/release-please-action@v4  (App token)
+    createPullRequests() maintains ONE open PR:
+      chore(main): release 1.0.5
+        package.json               1.0.4 → 1.0.5
+        package-lock.json          1.0.4 → 1.0.5
+        CHANGELOG.md               + ## [1.0.5] section
+        .release-please-manifest.json
         ↓
    ← HUMAN APPROVES + MERGES        (the only touchpoint)
         ↓
-same workflow, tag job:
+same workflow, on the merge push:
   VERSION=$(jq -r '.["."]' .release-please-manifest.json)
-  tag v$VERSION already exists?  → exit 0, nothing to do
+  has v$VERSION a published release?  → yes: exit, nothing to do
+                                      → API error: fail loudly
         ↓ no
-  create ANNOTATED tag v1.0.5 at HEAD
-  force-move ANNOTATED alias v1 → same commit
-  push both                                  (App token)
-  gh release create v1.0.5 --notes-file <CHANGELOG §1.0.5>   (App token)
-  dispatch readme-action-versions.yml
+  create ANNOTATED tag v1.0.5, push
+  force-move ANNOTATED alias v1 → v1.0.5's commit
+        ↓
+  release-please-action@v4 again, same run:
+    createReleases()      publishes the Release, attaching to the
+                          annotated tag; clears autorelease: pending
+    createPullRequests()  opens the next release PR
         ↓
 release-provenance.yml fires on release:published — unchanged
+marketplace-smoke.yml   fires on release:published — sees v1 already moved
 ```
 
-### Why release-please cannot create the tag itself
+### Why we pre-create the tag, and why release-please still publishes
 
-`release-please-action` publishes via `POST /releases`, which mints a **lightweight**
-tag ref — no tag object at all. Verified empirically across `googleapis/release-please`,
-`googleapis/release-please-action`, and `googleapis/nodejs-storage`: every release tag
-is lightweight. Creating the tag ourselves yields an annotated tag with a real message
-and tagger, which is strictly better, and lets us move the `v1` alias in the same step.
+`release-please-action` publishes via `POST /releases`, which mints a **lightweight** tag
+when none exists — no tag object at all. Verified empirically across
+`googleapis/release-please`, `googleapis/release-please-action` and
+`googleapis/nodejs-storage`: every release tag in those repos is lightweight. Creating an
+annotated tag ourselves _before_ that step means the Release attaches to a real tag object
+with a message and tagger, and lets the `v1` alias move in the same pass.
+
+**But release-please must still create the Release itself.** An earlier revision of this
+design used `skip-github-release: true` and published the Release by hand. That is a trap:
+release-please labels every release PR `autorelease: pending`, and the **only** code path
+that clears it is `createReleasesForPullRequest` — which `skip-github-release` skips
+entirely. `createPullRequests()` aborts outright while any merged release PR still carries
+the label. The repo would therefore have opened exactly one more release PR in its
+lifetime and then gone silent: every later push aborts, returns nothing, and exits 0.
+Green forever, releases simply stop — the same "a step that depends on remembering gets
+forgotten" failure the manual process had, only invisible.
+
+Ordering makes this work in a single run: `main()` calls `createReleases()` **before**
+`createPullRequests()`, so the label is cleared before it is read. The alias also moves
+before this step, so `marketplace-smoke.yml` — which fires on `release: published` and
+consumes `@v1` — sees the alias already correct.
 
 ### Manifest mode: omit `release-type`
 
@@ -299,14 +318,16 @@ and apply the same choice to the regenerated historical sections so old and new 
 
 ## Failure modes
 
-| Failure                                         | Behaviour                                       | Mitigation                                                        |
-| ----------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------- |
-| Release job re-run after a successful release   | Tag exists → exit 0                             | Manifest/tag idempotency check                                    |
-| Release PR merged but tag push fails            | Manifest is ahead of tags; no release published | Re-run `workflow_dispatch`; idempotency check makes it safe       |
-| `v1` move fails after `v1.0.5` is created       | New release exists, alias stale                 | Re-run; alias move is an unconditional force-update               |
-| `CHANGELOG.md` section extraction finds nothing | Release notes empty                             | Fail the job rather than publish an empty release                 |
-| App token unavailable (`APP_ID` unset)          | No PR, or PR with no CI                         | Guard the job on `vars.APP_ID != ''`, matching existing workflows |
-| markdownlint regression on generated changelog  | Release PR fails required checks                | Directive fix above; caught on the first release PR               |
+| Failure                                        | Behaviour                                          | Mitigation                                                                        |
+| ---------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Release job re-run after a successful release  | Tag exists → exit 0                                | Manifest/tag idempotency check                                                    |
+| Release PR merged but tag push fails           | Manifest is ahead of tags; no release published    | Re-run `workflow_dispatch`; idempotency check makes it safe                       |
+| `v1` move fails after `v1.0.5` is created      | New release exists, alias stale                    | Re-run; alias move is an unconditional force-update                               |
+| Transient API error on the release-state check | Ambiguous: is it released or not?                  | Only a definitive not-found proceeds; any other error exits 1 rather than tagging |
+| `workflow_dispatch` aimed at a feature branch  | Would tag that branch and drag `vN` onto it        | Job gated on `github.ref == 'refs/heads/main'`                                    |
+| Merged release PR keeps `autorelease: pending` | release-please stops opening release PRs, silently | release-please creates the Release itself, so it clears its own label             |
+| App token unavailable (`APP_ID` unset)         | No PR, or PR with no CI                            | Guard the job on `vars.APP_ID != ''`, matching existing workflows                 |
+| markdownlint regression on generated changelog | Release PR fails required checks                   | Directive fix above; caught on the first release PR                               |
 
 ## Testing
 
