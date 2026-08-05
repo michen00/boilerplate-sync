@@ -1,1 +1,8 @@
 dist
+
+# release-please owns CHANGELOG.md and emits `*` bullets plus two blank lines
+# after each heading. prettier collapses both, and a hook that modifies a file
+# fails -- which would break the required Pre-commit hooks check on every
+# release PR. prettier does not read markdownlint-configure-file directives, so
+# the directive at the top of CHANGELOG.md does not cover this.
+CHANGELOG.md
