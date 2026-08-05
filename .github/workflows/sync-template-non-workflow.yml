@@ -39,7 +39,6 @@ jobs:
                 - .gitlint
                 - .markdownlint.yml
                 - .prettierrc
-                - scripts/update-unreleased.sh
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-error: 'true'
       - name: Stage changes and create branch

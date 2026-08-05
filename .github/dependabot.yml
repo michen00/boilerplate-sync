@@ -27,11 +27,6 @@ updates:
       # sync-template workflows track @main. #160 rewrote both smoke refs to
       # @v1.0.4, which collapsed the canary into two copies of one commit.
       - dependency-name: michen00/boilerplate-sync
-      # changelog-autoupdate.yml floats this on the major on purpose:
-      # install-action resolves an unversioned tool from manifests baked into
-      # its own release, so pinning the action pins git-cliff with it. Also
-      # rewritten in #160 and reverted there.
-      - dependency-name: taiki-e/install-action
     cooldown:
       # Parity with the npm ecosystem above. Without it #160's four majors,
       # including a two-major codecov jump, arrived the day after publication
