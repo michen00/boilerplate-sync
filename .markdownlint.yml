@@ -4,5 +4,16 @@ first-line-heading: false
 line-length: false
 no-duplicate-heading:
   siblings_only: true
+table-column-style:
+  style: compact
+  aligned_delimiter: true
+table-format:
+  style: compact
+  aligned_delimiter: true
 ul-style:
   style: dash
+no-inline-html:
+  allowed_elements:
+    - br
+    - details
+    - summary
