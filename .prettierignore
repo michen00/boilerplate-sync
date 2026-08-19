@@ -5,4 +5,19 @@ dist
 # fails -- which would break the required Pre-commit hooks check on every
 # release PR. prettier does not read markdownlint-configure-file directives, so
 # the directive at the top of CHANGELOG.md does not cover this.
+#
+# Kept as its own entry even though `*.md` below now subsumes it: the reason is
+# unrelated to table style and must outlive any future decision to hand markdown
+# back to prettier.
 CHANGELOG.md
+
+# markdownlint owns markdown here -- see `table-column-style` in
+# .markdownlint.yml. prettier can only emit *aligned* tables and offers no
+# option to do otherwise, so letting it near markdown deadlocks the two hooks:
+# prettier pads every cell, `markdownlint --fix` compacts them back, and each
+# run reports "files were modified by this hook" forever.
+#
+# This file rather than the hook's `types_or` is the lever, because prettier's
+# CLI and the VS Code extension both read it. A `types_or` change would leave an
+# editor free to reintroduce aligned tables on save.
+*.md
