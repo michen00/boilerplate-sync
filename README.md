@@ -27,13 +27,13 @@ This project was inspired by [`kbrashears5/github-action-file-sync`](https://git
 
 **Boilerplate Sync takes the opposite approach with a pull model:**
 
-| Aspect        | Push Model (file-sync)                         | Pull Model (boilerplate-sync)               |
-| ------------- | ---------------------------------------------- | ------------------------------------------- |
-| Direction     | Source pushes to targets                       | Targets pull from source                    |
-| Control       | Source repo decides what to sync               | Each target repo decides what to sync       |
-| Access        | Source needs write access to all targets       | Targets only need read access to source     |
-| Configuration | Centralized in source repo                     | Distributed in each target repo             |
-| Review        | Changes applied directly or via PR from source | Changes go through PR review in target repo |
+| Aspect | Push Model (file-sync) | Pull Model (boilerplate-sync) |
+| --- | --- | --- |
+| Direction | Source pushes to targets | Targets pull from source |
+| Control | Source repo decides what to sync | Each target repo decides what to sync |
+| Access | Source needs write access to all targets | Targets only need read access to source |
+| Configuration | Centralized in source repo | Distributed in each target repo |
+| Review | Changes applied directly or via PR from source | Changes go through PR review in target repo |
 
 The pull model is ideal when:
 
@@ -101,33 +101,33 @@ jobs:
 
 ## Inputs
 
-| Input            | Required | Default               | Description                                   |
-| ---------------- | -------- | --------------------- | --------------------------------------------- |
-| `sources`        | ✅       | -                     | YAML array of source repositories (see below) |
-| `github-token`   | ✅       | `${{ github.token }}` | Token for accessing source repos              |
-| `create-missing` | ❌       | `true`                | Create project files that don't exist yet     |
-| `fail-on-error`  | ❌       | `false`               | Fail the action if any file sync fails        |
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `sources` | ✅ | - | YAML array of source repositories (see below) |
+| `github-token` | ✅ | `${{ github.token }}` | Token for accessing source repos |
+| `create-missing` | ❌ | `true` | Create project files that don't exist yet |
+| `fail-on-error` | ❌ | `false` | Fail the action if any file sync fails |
 
 ### Sources Configuration Format
 
 The `sources` array groups files by their source repository. Each source contains:
 
-| Field           | Required | Description                                                                                                      |
-| --------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
-| `source`        | ✅       | Source repository in `owner/repo` format                                                                         |
-| `ref`           | ❌       | Git ref (branch, tag, SHA) - applies to all files from this source. Defaults to the source repo's default branch |
-| `source-token`  | ❌       | Token for private source repos (falls back to `github-token`)                                                    |
-| `default_files` | ❌\*     | List of files where local path equals source path. Supports glob patterns (see below)                            |
-| `file_pairs`    | ❌\*     | Array of file mappings with explicit paths (see below)                                                           |
+| Field | Required | Description |
+| --- | --- | --- |
+| `source` | ✅ | Source repository in `owner/repo` format |
+| `ref` | ❌ | Git ref (branch, tag, SHA) - applies to all files from this source. Defaults to the source repo's default branch |
+| `source-token` | ❌ | Token for private source repos (falls back to `github-token`) |
+| `default_files` | ❌\* | List of files where local path equals source path. Supports glob patterns (see below) |
+| `file_pairs` | ❌\* | Array of file mappings with explicit paths (see below) |
 
 \*At least one of `default_files` or `file_pairs` is required per source.
 
 Each file mapping in `file_pairs`:
 
-| Field         | Required | Description                                                                          |
-| ------------- | -------- | ------------------------------------------------------------------------------------ |
-| `local_path`  | ✅       | Path in your repository to update                                                    |
-| `source_path` | ❌       | Path to the file in the source repository. Defaults to `local_path` if not specified |
+| Field | Required | Description |
+| --- | --- | --- |
+| `local_path` | ✅ | Path in your repository to update |
+| `source_path` | ❌ | Path to the file in the source repository. Defaults to `local_path` if not specified |
 
 ```yaml
 sources: |
@@ -161,13 +161,13 @@ sources: |
 
 The `default_files` field supports glob patterns for syncing multiple files at once:
 
-| Pattern | Description                        | Example                        |
-| ------- | ---------------------------------- | ------------------------------ |
-| `*`     | Match any characters except `/`    | `*.md` matches `README.md`     |
-| `**`    | Match any characters including `/` | `**/*.ts` matches nested `.ts` |
-| `?`     | Match single character             | `file?.ts` matches `file1.ts`  |
-| `[abc]` | Match character class              | `[abc].ts` matches `a.ts`      |
-| `{a,b}` | Match alternatives                 | `*.{js,ts}` matches both       |
+| Pattern | Description | Example |
+| --- | --- | --- |
+| `*` | Match any characters except `/` | `*.md` matches `README.md` |
+| `**` | Match any characters including `/` | `**/*.ts` matches nested `.ts` |
+| `?` | Match single character | `file?.ts` matches `file1.ts` |
+| `[abc]` | Match character class | `[abc].ts` matches `a.ts` |
+| `{a,b}` | Match alternatives | `*.{js,ts}` matches both |
 
 ```yaml
 sources: |
@@ -183,13 +183,13 @@ When a glob pattern matches multiple files, each matched file is synced with `lo
 
 ## Outputs
 
-| Output          | Type     | Description                                                                                  |
-| --------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `has-changes`   | `string` | `"true"` if any files were updated or created, `"false"` otherwise. Always set.              |
-| `updated-count` | `string` | Number of files updated or created. Always set.                                              |
-| `failed-count`  | `string` | Number of files that failed to sync. Always set.                                             |
+| Output | Type | Description |
+| --- | --- | --- |
+| `has-changes` | `string` | `"true"` if any files were updated or created, `"false"` otherwise. Always set. |
+| `updated-count` | `string` | Number of files updated or created. Always set. |
+| `failed-count` | `string` | Number of files that failed to sync. Always set. |
 | `skipped-count` | `string` | Number of files skipped (unchanged, or missing when create-missing is disabled). Always set. |
-| `summary`       | `JSON`   | Full sync summary with details on each file. Always set.                                     |
+| `summary` | `JSON` | Full sync summary with details on each file. Always set. |
 
 ## Examples
 

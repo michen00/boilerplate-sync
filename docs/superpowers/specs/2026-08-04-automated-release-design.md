@@ -218,28 +218,28 @@ version that stops drifting.
 
 ### Added
 
-| File                            | Purpose                                               |
-| ------------------------------- | ----------------------------------------------------- |
+| File | Purpose |
+| --- | --- |
 | `.github/workflows/release.yml` | release-please in PR mode + annotated tag/release job |
-| `release-please-config.json`    | `release-type: node`, changelog sections              |
-| `.release-please-manifest.json` | Seeded with `1.0.4`                                   |
+| `release-please-config.json` | `release-type: node`, changelog sections |
+| `.release-please-manifest.json` | Seeded with `1.0.4` |
 
 ### Changed
 
-| File                                               | Change                                                                    |
-| -------------------------------------------------- | ------------------------------------------------------------------------- |
-| `CHANGELOG.md`                                     | Fully regenerated in release-please format; extend markdownlint directive |
-| `.prettierignore`                                  | Add `CHANGELOG.md` so prettier stops rewriting generated output           |
-| `.github/workflows/sync-template-non-workflow.yml` | Remove the `scripts/update-unreleased.sh` entry                           |
-| `Makefile`                                         | Retire the `release` target                                               |
+| File | Change |
+| --- | --- |
+| `CHANGELOG.md` | Fully regenerated in release-please format; extend markdownlint directive |
+| `.prettierignore` | Add `CHANGELOG.md` so prettier stops rewriting generated output |
+| `.github/workflows/sync-template-non-workflow.yml` | Remove the `scripts/update-unreleased.sh` entry |
+| `Makefile` | Retire the `release` target |
 
 ### Removed
 
-| File                                         | Reason                                                                                 |
-| -------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `cliff.toml`                                 | bs-local; superseded by release-please                                                 |
-| `.github/workflows/changelog-autoupdate.yml` | bs-local; superseded                                                                   |
-| `scripts/update-unreleased.sh`               | Superseded; **must** also be dropped from the sync list or the next sync re-creates it |
+| File | Reason |
+| --- | --- |
+| `cliff.toml` | bs-local; superseded by release-please |
+| `.github/workflows/changelog-autoupdate.yml` | bs-local; superseded |
+| `scripts/update-unreleased.sh` | Superseded; **must** also be dropped from the sync list or the next sync re-creates it |
 
 `michen00/template` is **not** modified. Only `update-unreleased.sh` among this
 machinery is template-synced; `cliff.toml` and `changelog-autoupdate.yml` are
@@ -293,12 +293,12 @@ Section membership is `feat`, `fix`, `perf`, `revert`, plus anything marked brea
 exactly what release-please treats as releasable, which is what makes the result
 consistent going forward. Derived from history:
 
-| release         | releasable commits                               |
-| --------------- | ------------------------------------------------ |
-| `1.0.0`         | 7 `feat` (3 of them `feat!` breaking) + 4 `fix`  |
-| `1.0.1`         | 1 `feat(ci)` + 2 `fix`                           |
+| release | releasable commits |
+| --- | --- |
+| `1.0.0` | 7 `feat` (3 of them `feat!` breaking) + 4 `fix` |
+| `1.0.1` | 1 `feat(ci)` + 2 `fix` |
 | `1.0.2` `1.0.3` | none — release-please would never have cut these |
-| `1.0.4`         | 1 `fix(sync)` (#120)                             |
+| `1.0.4` | 1 `fix(sync)` (#120) |
 
 Two deliberate differences from the current file:
 
@@ -318,16 +318,16 @@ and apply the same choice to the regenerated historical sections so old and new 
 
 ## Failure modes
 
-| Failure                                        | Behaviour                                          | Mitigation                                                                        |
-| ---------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Release job re-run after a successful release  | Tag exists → exit 0                                | Manifest/tag idempotency check                                                    |
-| Release PR merged but tag push fails           | Manifest is ahead of tags; no release published    | Re-run `workflow_dispatch`; idempotency check makes it safe                       |
-| `v1` move fails after `v1.0.5` is created      | New release exists, alias stale                    | Re-run; alias move is an unconditional force-update                               |
-| Transient API error on the release-state check | Ambiguous: is it released or not?                  | Only a definitive not-found proceeds; any other error exits 1 rather than tagging |
-| `workflow_dispatch` aimed at a feature branch  | Would tag that branch and drag `vN` onto it        | Job gated on `github.ref == 'refs/heads/main'`                                    |
-| Merged release PR keeps `autorelease: pending` | release-please stops opening release PRs, silently | release-please creates the Release itself, so it clears its own label             |
-| App token unavailable (`APP_ID` unset)         | No PR, or PR with no CI                            | Guard the job on `vars.APP_ID != ''`, matching existing workflows                 |
-| markdownlint regression on generated changelog | Release PR fails required checks                   | Directive fix above; caught on the first release PR                               |
+| Failure | Behaviour | Mitigation |
+| --- | --- | --- |
+| Release job re-run after a successful release | Tag exists → exit 0 | Manifest/tag idempotency check |
+| Release PR merged but tag push fails | Manifest is ahead of tags; no release published | Re-run `workflow_dispatch`; idempotency check makes it safe |
+| `v1` move fails after `v1.0.5` is created | New release exists, alias stale | Re-run; alias move is an unconditional force-update |
+| Transient API error on the release-state check | Ambiguous: is it released or not? | Only a definitive not-found proceeds; any other error exits 1 rather than tagging |
+| `workflow_dispatch` aimed at a feature branch | Would tag that branch and drag `vN` onto it | Job gated on `github.ref == 'refs/heads/main'` |
+| Merged release PR keeps `autorelease: pending` | release-please stops opening release PRs, silently | release-please creates the Release itself, so it clears its own label |
+| App token unavailable (`APP_ID` unset) | No PR, or PR with no CI | Guard the job on `vars.APP_ID != ''`, matching existing workflows |
+| markdownlint regression on generated changelog | Release PR fails required checks | Directive fix above; caught on the first release PR |
 
 ## Testing
 

@@ -51,30 +51,30 @@ config that skip signing. See repo root [AGENTS.md](../../../AGENTS.md).
 
 ### Title Rules
 
-| Rule          | Constraint                                     |
-| ------------- | ---------------------------------------------- |
-| Format        | `<type>(<scope>): <subject>` (Conventional     |
-|               | Commits; scope is optional)                    |
-| Length        | 5–50 characters (entire title line)            |
-| Mood          | Imperative ("add", "fix" — not past tense)     |
-| Allowed types | `feat`, `chore`, `docs`, `refactor`, `style`,  |
-|               | `fix`, `build`, `test`, `ci`, `perf`, `revert` |
+| Rule | Constraint |
+| --- | --- |
+| Format | `<type>(<scope>): <subject>` (Conventional |
+| | Commits; scope is optional) |
+| Length | 5–50 characters (entire title line) |
+| Mood | Imperative ("add", "fix" — not past tense) |
+| Allowed types | `feat`, `chore`, `docs`, `refactor`, `style`, |
+| | `fix`, `build`, `test`, `ci`, `perf`, `revert` |
 
 ### Body Rules
 
-| Rule        | Constraint                                            |
-| ----------- | ----------------------------------------------------- |
-| Presence    | Optional (body-is-missing is ignored)                 |
+| Rule | Constraint |
+| --- | --- |
+| Presence | Optional (body-is-missing is ignored) |
 | Line length | 72 characters max per line (commit message body only) |
-| Min length  | Ignored                                               |
+| Min length | Ignored |
 
 ### Exemptions
 
-| Pattern                  | Exempted rules   |
-| ------------------------ | ---------------- |
+| Pattern | Exempted rules |
+| --- | --- |
 | `chore: merge ...` title | body-is-missing, |
-|                          | body-min-length, |
-|                          | title-max-length |
+| | body-min-length, |
+| | title-max-length |
 
 ## Workflow
 
