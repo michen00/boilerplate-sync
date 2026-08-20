@@ -4,5 +4,7 @@ first-line-heading: false
 line-length: false
 no-duplicate-heading:
   siblings_only: true
+table-column-style:
+  style: compact
 ul-style:
   style: dash
