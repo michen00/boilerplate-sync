@@ -34,15 +34,15 @@
 
 ## File Structure
 
-| File                                               | Responsibility                                                      |
-| -------------------------------------------------- | ------------------------------------------------------------------- |
-| `.github/workflows/release.yml`                    | The whole release pipeline: PR maintenance, tag, publish            |
-| `release-please-config.json`                       | Which release type and packages release-please manages              |
-| `.release-please-manifest.json`                    | Current released version; the tag job's source of truth             |
-| `CHANGELOG.md`                                     | Regenerated in release-please format; also the release-notes source |
-| `.prettierignore`                                  | Exempts `CHANGELOG.md` from prettier                                |
-| `.github/workflows/sync-template-non-workflow.yml` | Stops pulling `update-unreleased.sh` from template                  |
-| `Makefile`                                         | Loses the now-dead `release` target                                 |
+| File | Responsibility |
+| --- | --- |
+| `.github/workflows/release.yml` | The whole release pipeline: PR maintenance, tag, publish |
+| `release-please-config.json` | Which release type and packages release-please manages |
+| `.release-please-manifest.json` | Current released version; the tag job's source of truth |
+| `CHANGELOG.md` | Regenerated in release-please format; also the release-notes source |
+| `.prettierignore` | Exempts `CHANGELOG.md` from prettier |
+| `.github/workflows/sync-template-non-workflow.yml` | Stops pulling `update-unreleased.sh` from template |
+| `Makefile` | Loses the now-dead `release` target |
 
 Note on testing style: this change is workflow and configuration, not library code, so there is no unit-test harness to drive. Each task below still ends with a concrete, runnable verification — pre-commit hooks, `actionlint`, a `release-please --dry-run` against real history, or shell logic exercised locally against fixtures. Treat those as the test cycle.
 
