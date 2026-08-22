@@ -396,3 +396,9 @@ Key risks to consider:
 - Environment-specific settings
 - Files that require coordination with other files
 - Any file where changes could break your build or deployment
+
+## Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/michen00/boilerplate-sync)
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — asking a question, reporting a bug, suggesting an enhancement, and making a first code contribution
+- [SECURITY.md](SECURITY.md) — supported versions, reporting a vulnerability privately, and guidance for consumers
+- [CHANGELOG.md](CHANGELOG.md) — release history
