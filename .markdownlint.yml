@@ -8,3 +8,8 @@ table-column-style:
   style: compact
 ul-style:
   style: dash
+no-inline-html:
+  allowed_elements:
+    - br
+    - details
+    - summary
