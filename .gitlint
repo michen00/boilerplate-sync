@@ -67,11 +67,17 @@ min-length=5
 # will not cause a violation, but "WIP: my title" will.
 # words=wip
 
-# [title-match-regex]
+[title-match-regex]
 # python-style regex that the commit-msg title must match
 # Note that the regex can contradict with other rules if not used correctly
 # (e.g. title-must-not-contain-word).
-# regex=^US[0-9]*
+# Enforce the Conventional Commits shape the constitution already mandates:
+# a known type, an optional scope, an optional `!`, then a lowercase subject.
+# contrib-title-conventional-commits alone would accept "Feat: Added thing".
+# custom-commit-hooks' enhance-scope runs first (it is listed above gitlint in
+# .pre-commit-config.yaml and commit-msg hooks run in config order), so the
+# scope it injects is already present when this rule sees the subject.
+regex=^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?!?: [a-z].*\S$
 
 [body-max-line-length]
 line-length=72
