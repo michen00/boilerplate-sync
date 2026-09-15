@@ -23,12 +23,7 @@
 - **Do not modify `michen00/template`.** Only `scripts/update-unreleased.sh` is synced from it; the fix is to stop syncing it, locally.
 - **Do not alter existing tags or GitHub Releases.** `1.0.0`–`1.0.4` stay exactly as published.
 - Work on a branch off `main`; never commit directly to `main`.
-- **Blocks whose exact bytes matter use a ` ```text ` fence on purpose.** prettier
-  formats fenced blocks in languages it recognizes — including `markdown` and `yaml` —
-  and it runs on this plan. An earlier revision used ` ```markdown ` for the
-  `CHANGELOG.md` content and ` ```yaml ` for Task 4's append fragment; prettier
-  rewrote `*` bullets to `-`, collapsed the deliberate double blank lines, and stripped
-  Task 4's six-space indent down to column 0. Do not "fix" these fences back.
+- **Blocks whose exact bytes matter use a ` ```text ` fence on purpose.** prettier formats fenced blocks in languages it recognizes — including `markdown` and `yaml` — and it runs on this plan. An earlier revision used ` ```markdown ` for the `CHANGELOG.md` content and ` ```yaml ` for Task 4's append fragment; prettier rewrote `*` bullets to `-`, collapsed the deliberate double blank lines, and stripped Task 4's six-space indent down to column 0. Do not "fix" these fences back.
 
 ---
 
@@ -213,12 +208,7 @@ Keep it minimal. `release-type: node` bumps `package.json` and `package-lock.jso
 }
 ```
 
-**`include-component-in-tag: false` is load-bearing — do not drop it as noise.** In
-manifest mode it defaults to `true`, which prefixes tags with the `package.json` name.
-release-please then hunts for `boilerplate-sync-v1.0.4`, never finds it, concludes there
-has been no release at all, walks the entire history, hits the three `feat!` commits in
-`1.0.0`, and proposes **`boilerplate-sync-2.0.0`** with every commit ever made in the
-changelog body. Observed directly during implementation, not theorised.
+**`include-component-in-tag: false` is load-bearing — do not drop it as noise.** In manifest mode it defaults to `true`, which prefixes tags with the `package.json` name. release-please then hunts for `boilerplate-sync-v1.0.4`, never finds it, concludes there has been no release at all, walks the entire history, hits the three `feat!` commits in `1.0.0`, and proposes **`boilerplate-sync-2.0.0`** with every commit ever made in the changelog body. Observed directly during implementation, not theorised.
 
 - [ ] **Step 2: Create `.release-please-manifest.json`**
 
@@ -772,17 +762,9 @@ Expected: the run succeeds and no release PR exists. Verified in advance against
 
 ## Post-review revision (supersedes Task 3 Step 1 and Task 4 Step 3)
 
-The final whole-branch review found that `skip-github-release: true` disables the
-only code path that clears release-please's `autorelease: pending` label, and
-`createPullRequests()` aborts while any merged release PR still carries it. The repo
-would therefore open exactly one more release PR ever and then go silent — green,
-forever. The architecture changed in response: release-please now publishes the
-Release itself and keeps its own bookkeeping, while we pre-create the annotated tag so
-the Release attaches to it.
+The final whole-branch review found that `skip-github-release: true` disables the only code path that clears release-please's `autorelease: pending` label, and `createPullRequests()` aborts while any merged release PR still carries it. The repo would therefore open exactly one more release PR ever and then go silent — green, forever. The architecture changed in response: release-please now publishes the Release itself and keeps its own bookkeeping, while we pre-create the annotated tag so the Release attaches to it.
 
-`createReleases()` runs **before** `createPullRequests()` in the action's `main()`, so
-the label is cleared before it is read — a single run both publishes and opens the next
-PR, with no delay.
+`createReleases()` runs **before** `createPullRequests()` in the action's `main()`, so the label is cleared before it is read — a single run both publishes and opens the next PR, with no delay.
 
 This is the complete, final `.github/workflows/release.yml`. Replace the file wholesale.
 
@@ -968,17 +950,9 @@ jobs:
 
 **`README.md:351`** currently claims, in the Security section consumers read:
 
-> Release tags (`v*`) are signed and protected by a tag ruleset; only the repository
-> owner can create, move, or delete them.
+> Release tags (`v*`) are signed and protected by a tag ruleset; only the repository owner can create, move, or delete them.
 
-Three parts of that are now false: new tags are annotated but **unsigned**; the ruleset
-covers `refs/tags/v*.*.*`, not `v*`; `creation` is no longer restricted; and the App,
-not only the owner, creates them. Rewrite it to state what is actually true — release
-tags `vX.Y.Z` are immutable (`update` and `deletion` blocked by ruleset), the moving
-`vN` alias is deliberately not, tags are unsigned, and integrity for the consumed
-artifact comes from SLSA build provenance verifiable with
-`gh attestation verify dist/index.js --repo michen00/boilerplate-sync`. Keep the
-existing advice to pin a full commit SHA — that remains sound.
+Three parts of that are now false: new tags are annotated but **unsigned**; the ruleset covers `refs/tags/v*.*.*`, not `v*`; `creation` is no longer restricted; and the App, not only the owner, creates them. Rewrite it to state what is actually true — release tags `vX.Y.Z` are immutable (`update` and `deletion` blocked by ruleset), the moving `vN` alias is deliberately not, tags are unsigned, and integrity for the consumed artifact comes from SLSA build provenance verifiable with `gh attestation verify dist/index.js --repo michen00/boilerplate-sync`. Keep the existing advice to pin a full commit SHA — that remains sound.
 
 **`AGENTS.md:42-45`** is orphaned by Task 5:
 
@@ -988,24 +962,13 @@ existing advice to pin a full commit SHA — that remains sound.
 - Releases use `gh release create` with generated notes.
 ```
 
-`make release` no longer exists, and anyone following the second line would hand-publish
-a release that bypasses the pipeline, orphans the manifest, and can leave a lightweight
-tag. Replace it with: releases are automated by `.github/workflows/release.yml`; the only
-manual step is approving and merging the `chore(main): release X.Y.Z` PR; never create
-tags or releases by hand.
+`make release` no longer exists, and anyone following the second line would hand-publish a release that bypasses the pipeline, orphans the manifest, and can leave a lightweight tag. Replace it with: releases are automated by `.github/workflows/release.yml`; the only manual step is approving and merging the `chore(main): release X.Y.Z` PR; never create tags or releases by hand.
 
-**`CLAUDE.md` Gotchas** — add the two non-obvious new conventions. `CHANGELOG.md` is
-generated by release-please and must not be hand-edited, and it is deliberately listed in
-`.prettierignore`: a well-meaning "fix" to its `*` bullets or double blank lines breaks
-the required `Pre-commit hooks` check on every future release PR.
+**`CLAUDE.md` Gotchas** — add the two non-obvious new conventions. `CHANGELOG.md` is generated by release-please and must not be hand-edited, and it is deliberately listed in `.prettierignore`: a well-meaning "fix" to its `*` bullets or double blank lines breaks the required `Pre-commit hooks` check on every future release PR.
 
 ### Task 6 addition: verify the _second_ release
 
-Task 6 as originally written stops after verifying `v1.0.5`, which would have signed off
-on the Critical defect above — it first shows at release two, as an absence. Add a final
-check: after `v1.0.5` is published, confirm the merged release PR no longer carries
-`autorelease: pending`, and that a subsequent releasable commit still opens a new release
-PR.
+Task 6 as originally written stops after verifying `v1.0.5`, which would have signed off on the Critical defect above — it first shows at release two, as an absence. Add a final check: after `v1.0.5` is published, confirm the merged release PR no longer carries `autorelease: pending`, and that a subsequent releasable commit still opens a new release PR.
 
 ```bash
 # The merged release PR must have been re-labelled, not left pending.
