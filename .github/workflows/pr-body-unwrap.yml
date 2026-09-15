@@ -1,0 +1,39 @@
+---
+# Rewrites a hard-wrapped pull request body rather than reporting it, and after
+# a rewrite deletes any report pr-body-unwrap-check.yml left. The report
+# cannot withdraw its own: GitHub starts no workflow run for an event caused
+# by its own `GITHUB_TOKEN`, so nothing tells it the body has changed.
+#
+# Only on open, reopen and ready-for-review. Running it on every push would
+# overwrite whatever the author had typed since. Drafts are not edited, which
+# is what `ready_for_review` is here for.
+#
+# `pull_request_target` is the only trigger this one accepts, and it is why
+# the file has to be on the default branch: under `pull_request` the workflow
+# file would come from the pull request itself, and that file is what grants
+# the token. It checks out nothing. A consequence worth knowing when editing
+# it -- a pull request cannot try this out; it takes effect once merged. That
+# matters more here than in most repositories: this action's own contributors
+# are as likely to be forks as branches.
+#
+# Unlike a file, a body carries no evidence of intent: there is no hard-break
+# marker to distinguish a break the author wanted from one their editor made,
+# so this can join a break that was meant to stay. `<!-- unwrap-ignore -->` on
+# the line above a paragraph keeps it.
+#
+# Pinned to v0.5.0, the first release carrying this reusable workflow. Verify
+# a `uses:` ref actually contains the file, not just that the tag is the
+# newest release: a reusable workflow that cannot be resolved fails the run
+# before any job starts, and a run with no jobs contributes no check to the
+# pull request it should have edited.
+name: PR body unwrap
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+jobs:
+  edit:
+    permissions:
+      pull-requests: write
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body.yml@v0.5.0

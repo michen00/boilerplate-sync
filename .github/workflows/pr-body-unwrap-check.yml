@@ -1,0 +1,45 @@
+---
+# Reports a hard-wrapped pull request body. GitHub renders every newline in a
+# body as a `<br>`, so a body wrapped in an editor or a heredoc reaches
+# readers at whatever width it was typed to.
+#
+# Deliberately narrower than the upstream example, which also carries
+# `opened` and `reopened`. Those belong to pr-body-unwrap.yml: sharing an
+# event fires both at once, and this report would then describe a body the
+# rewrite is about to replace. `edited` is not in the default type set and is
+# the one that matters -- editing a body fires it alone, so without it a
+# report would stand on a body the author has already fixed.
+#
+# `pull_request_target`, not `pull_request`, and the difference is who the
+# report reaches. A fork's token is read-only whatever a caller's
+# `permissions:` block asks for, so under `pull_request` the comment is
+# refused for every outside contributor -- the people least likely to know
+# this action's prose convention, and the ones the report exists for. The run
+# does not fail there and the report is not lost: the reusable workflow falls
+# back to the job summary. But a summary is something you have to open a
+# check to find, and a comment is not.
+#
+# What makes that safe here is that the reusable workflow checks out nothing
+# -- it has no `actions/checkout` step at all. It reads the body from the
+# event payload and posts a comment, so the usual `pull_request_target`
+# hazard, a writable token handed to unreviewed code, has nothing to attach
+# to. Keep it that way: adding a checkout of the pull request head under this
+# trigger is what would turn it into the vulnerability the pattern is known
+# for.
+#
+# Pinned to v0.5.0, the first release carrying this reusable workflow; see
+# the note in pr-body-unwrap.yml for why the tag has to be checked for the
+# file rather than assumed from the release being newest.
+name: PR body unwrap check
+
+on:
+  pull_request_target:
+    types: [synchronize, edited]
+
+jobs:
+  report:
+    # The reusable workflow declares no permissions of its own; only the
+    # comment needs one, and the scope belongs on the calling job.
+    permissions:
+      pull-requests: write
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body-check.yml@v0.5.0
