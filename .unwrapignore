@@ -1,0 +1,16 @@
+# What the Markdown prose writer must not rewrite. That writer is the
+# unwrap-markdown-prose-py hook in .pre-commit-config.yaml, and it reads this file
+# itself rather than being handed an exclude list, so a bare CLI run in this directory
+# honors these patterns too. This file is the whole definition: nothing else in the
+# tree carries a second copy of the rule for it to agree with.
+#
+# Markdown that steers automation is not prose. A skill, a command, or an
+# instruction file tells a write-capable agent what to do. Every one of them lives
+# under a dot-directory apart from the two root files named below.
+#
+# `.*/` covers every dot-directory, including one added tomorrow -- `.cursor/`,
+# `.claude/`, `.github/` alike -- unlike a bare `.*`, which would match only the
+# root files.
+.*/
+AGENTS.md
+CLAUDE.md

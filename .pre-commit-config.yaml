@@ -82,6 +82,22 @@ repos:
     rev: v3.14.1-1
     hooks:
       - id: shfmt
+  # One paragraph is one line, so a diff to a paragraph is one line. Ordered
+  # before markdownlint below so that what markdownlint --fix sees is the
+  # final text rather than a shape about to change under it.
+  #
+  # Does not collide with markdownlint or prettier: it leaves code fences,
+  # tables, lists, front matter, hard breaks, and label rows untouched, and
+  # tables are the only thing either of those two touch in this tree (see
+  # .prettierignore for why prettier is kept off markdown entirely).
+  #
+  # The writing id, not the `-check` one: nothing else in this tree reflows
+  # prose, so the hook can hold the convention instead of only reporting on
+  # it.
+  - repo: https://github.com/michen00/markdown-prose-hooks-py
+    rev: v0.5.0
+    hooks:
+      - id: unwrap-markdown-prose-py
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.49.1
     hooks:
