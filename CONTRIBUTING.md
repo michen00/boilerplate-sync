@@ -142,6 +142,7 @@ git push origin <branch name>
   - Run `npm run test` (or `make test`) to verify tests pass
   - Run `make run-pre-commit` to run the pre-commit checks
 - Follow the code standards and conventions of the project
+- Pull request bodies are unwrapped automatically (hard line breaks joined into flowing prose) when a pull request is opened, reopened, or marked ready for review; add `<!-- unwrap-ignore -->` on the line above a paragraph to keep an intentional line break
 
 And finally, when you are satisfied with your changes, open a new PR.
 
