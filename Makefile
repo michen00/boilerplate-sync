@@ -86,6 +86,15 @@ test: ## Run tests once
 test-watch: ## Run tests in watch mode
 	npm run test:watch
 
+.PHONY: test-python
+test-python: ## Run the checks/ package test suite (pip install -r requirements-dev.txt)
+	@if command -v pytest >/dev/null 2>&1; then \
+        pytest checks/tests; \
+    else \
+        echo "$(YELLOW)Warning: pytest is not installed. Skipping Python tests.$(_COLOR)"; \
+        echo "Install it with: pip install -r requirements-dev.txt"; \
+    fi
+
 .PHONY: lint
 lint: ## Run ESLint
 	npm run lint
@@ -95,7 +104,7 @@ type-check: ## Run TypeScript type checking
 	npm run type-check
 
 .PHONY: check
-check: install run-pre-commit lint type-check test ## Run all checks (lint, type-check, tests)
+check: install run-pre-commit lint type-check test test-python ## Run all checks (lint, type-check, tests)
 
 .PHONY: clean
 TO_REMOVE := \
