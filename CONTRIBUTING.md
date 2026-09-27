@@ -143,7 +143,7 @@ git push origin <branch name>
   - Make sure `npm run type-check` passes without errors
   - Run `npm run test` (or `make test`) to verify tests pass
   - Run `make run-pre-commit` to run the pre-commit checks
-- The pull request title follows the same conventional-commit rules as a commit subject (check locally with `python3 -m checks.check_pr_title "<title>"`), and the body must include `## Summary` and `## Test plan` headings (check with `printf '%s' "$BODY" | python3 -m checks.check_pr_body --require`); bot-authored pull requests are exempt from both
+- The pull request title follows the same conventional-commit rules as a commit subject (check locally with `python3 -m checks.check_pr_title "<title>"`). The body has no required sections, but leftover placeholders, TBD or TODO markers, markdownlint directives, and code fences without a language tag draw warnings that do not fail the check (check with `printf '%s' "$BODY" | python3 -m checks.check_pr_body --require`). Bot-authored pull requests are exempt from both
 - Follow the code standards and conventions of the project
 - Pull request bodies are unwrapped automatically (hard line breaks joined into flowing prose) when a pull request is opened, reopened, or marked ready for review; add `<!-- unwrap-ignore -->` on the line above a paragraph to keep an intentional line break
 
