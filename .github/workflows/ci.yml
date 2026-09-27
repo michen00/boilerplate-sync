@@ -36,6 +36,18 @@ jobs:
       - name: Run pre-commit hooks
         run: |
           pre-commit run --all-files
+  python-tests:
+    name: Python checks test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pytest
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Run pytest
+        run: pytest checks/tests
+
   build:
     runs-on: ubuntu-latest
     steps:
