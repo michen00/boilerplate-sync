@@ -221,8 +221,6 @@ jobs:
         id: eligible
         if: steps.provenance.outputs.trusted == 'true'
         env:
-          GH_TOKEN: ${{ env.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
           UPDATE_TYPE: ${{ steps.dependabot.outputs.update-type }}
           ECOSYSTEM: ${{ steps.dependabot.outputs.package-ecosystem }}
@@ -239,56 +237,38 @@ jobs:
               echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
             version-update:semver-major)
-              # Majors are gated on ecosystem, because ecosystem decides whether a green
-              # pull request is evidence about the change.
+              # Majors merge on green too, in every ecosystem and with no exceptions. A major
+              # is accepted once every required check passes: the latest version is almost
+              # always the one wanted, and a major held for a person is a merge somebody has
+              # to remember to make.
               #
-              # `github-actions` arms unless the diff reaches a workflow no pull request
-              # runs. The actions here are pinned to floating major tags, so Dependabot
-              # raises an actions pull request only when a major moves -- which made a
-              # blanket major hold a permanent hold on every actions pull request there
-              # would ever be. The cooldown in dependabot.yml is the soak that replaces it.
+              # The trade-off is accepted rather than overlooked. Green CI is evidence only
+              # about code a pull request runs. An actions major whose `uses:` line sits in a
+              # workflow no pull request executes -- a release, publish or scheduled job, or
+              # a step whose condition is false on a bot pull request -- merges with nothing
+              # having exercised it, and so does a dependency major on a path CI does not
+              # cover. A break there surfaces the next time that code runs, and is fixed
+              # forward. Here that includes the release, marketplace and template-sync
+              # workflows, which run after a merge, on a release or on a schedule, so a break
+              # in one of them surfaces there rather than on the pull request that caused it.
               #
-              # The hold list earns its keep here because this repository publishes: the
-              # release, marketplace and template-sync paths are all driven by workflows a
-              # pull request never executes, and a break in one of those is invisible until
-              # it matters. For actions the changed file IS the blast radius, since an
-              # action runs only where its `uses:` line is written, so a per-file test is
-              # sound here in a way it would not be for npm -- where a package can be
-              # imported anywhere and the diff would touch package.json alone.
+              # The cooldowns in dependabot.yml are the soak: Dependabot raises no pull
+              # request for a release until its cooldown has passed. Their effective length
+              # is longer than the number suggests for actions, which is worth knowing before
+              # tuning it: that ecosystem is polled on the 1st and 15th, so an update whose
+              # cooldown expires just after a poll waits until the next one. Thirty days of
+              # cooldown therefore lands a pull request roughly thirty to forty-five days
+              # after the release.
               #
-              # Listed rather than inferred, which is this branch's known weakness: a
-              # workflow's triggers can change without this file noticing, and a stale list
-              # fails by arming. Re-derive it when a trigger changes.
-              #
-              # Query and match are separate statements on purpose. As one pipeline the
-              # trailing `|| true` -- needed because grep exits 1 when it matches nothing --
-              # would also swallow the query failing, and an unreadable file list would then
-              # count as zero held files and arm. Both the new and the previous path of every
-              # changed file, because a rename reports the old one separately.
-              if [ "$ECOSYSTEM" = "github-actions" ]; then
-                changed=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/files" --paginate \
-                  --jq '.[] | .filename, (.previous_filename // empty)')
-                held=$(printf '%s\n' "$changed" \
-                  | grep -cFx -e '.github/workflows/release.yml' \
-                               -e '.github/workflows/release-provenance.yml' \
-                               -e '.github/workflows/marketplace-smoke.yml' \
-                               -e '.github/workflows/sync-template-github-workflows.yml' \
-                               -e '.github/workflows/sync-template-non-workflow.yml' \
-                               -e '.github/workflows/readme-action-versions.yml' \
-                               -e '.github/workflows/pre-commit-autoupdate.yml' \
-                               -e '.github/workflows/app-token-check.yml' \
-                  || true)
-                if [ "$held" -ne 0 ]; then
-                  echo "::warning::actions major reaches a workflow no PR runs; holding."
-                  echo "should_merge=false" >>"$GITHUB_OUTPUT"
-                else
-                  echo "::notice::actions major, only where a PR exercises it; eligible."
-                  echo "should_merge=true" >>"$GITHUB_OUTPUT"
-                fi
-              else
-                echo "::warning::${ECOSYSTEM:-unknown} major is not exercised end to end; holding."
-                echo "should_merge=false" >>"$GITHUB_OUTPUT"
-              fi
+              # Nothing here reads the ecosystem except the log line. If a test on it ever
+              # returns, compare against fetch-metadata's slugs and not the keys
+              # dependabot.yml is written in: the action takes package-ecosystem from the
+              # branch name, so it reports `github_actions` and `npm_and_yarn`, never
+              # `github-actions` or `npm`. A comparison against a config key does not fail
+              # loudly. It never matches, every major it was meant to arm falls through to a
+              # hold, and the run stays green.
+              echo "::notice::${ECOSYSTEM:-unknown} major; eligible on green CI."
+              echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
             *)
               echo "::warning::Holding ${UPDATE_TYPE:-unknown update type} for a human."
