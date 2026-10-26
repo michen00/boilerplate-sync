@@ -47,8 +47,8 @@ jobs:
     steps:
       # Fail loudly rather than falling back to GITHUB_TOKEN. Other workflows
       # here degrade gracefully because their PRs can still be merged by hand,
-      # but a release PR opened by GITHUB_TOKEN gets no check runs at all, and
-      # main-protect requires three -- so it could never be merged by anyone.
+      # but a release PR opened by GITHUB_TOKEN gets no check runs at all, so
+      # while main-protect requires any, nobody could ever merge it.
       # An immediate error beats a permanently stuck PR. Mirrors the guard in
       # app-token-check.yml.
       - name: Require the App credential
