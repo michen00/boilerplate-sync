@@ -45,12 +45,8 @@ jobs:
     # it. release-provenance.yml guards the same class of dispatch-ref abuse.
     if: github.ref == 'refs/heads/main'
     steps:
-      # Fail loudly rather than falling back to GITHUB_TOKEN. Other workflows
-      # here degrade gracefully because their PRs can still be merged by hand,
-      # but a release PR opened by GITHUB_TOKEN gets no check runs at all, so
-      # while main-protect requires any, nobody could ever merge it.
-      # An immediate error beats a permanently stuck PR. Mirrors the guard in
-      # app-token-check.yml.
+      # Fails instead of falling back to `GITHUB_TOKEN`: a release pull request opened under
+      # it gets no check runs, so while main-protect requires any, nobody can merge it.
       - name: Require the App credential
         env:
           APP_CLIENT_ID: ${{ vars.APP_CLIENT_ID }}
@@ -62,9 +58,7 @@ jobs:
             exit 1
           fi
 
-      # No `if:` guard and no GITHUB_TOKEN fallback below -- the step above
-      # already failed the job if the credential is missing, so a fallback
-      # would only be dead code that misleads the next reader.
+      # No `if:` and no fallback: the step above fails the job without the credential.
       - name: Mint app token
         id: app-token
         uses: actions/create-github-app-token@v3
