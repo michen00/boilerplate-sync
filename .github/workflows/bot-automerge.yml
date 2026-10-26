@@ -28,12 +28,10 @@ concurrency:
   # 30679210030 was cancelled by 30679291569 (actor boilerplate-sync-bot[bot]) 5s
   # after its own push, on every dist push observed.
   #
-  # The consequence used to be worse than a cancellation. The job gate read
-  # github.actor, so the replacement run skipped as well, and approval and
-  # auto-merge then ran for nobody. That gate now reads pull_request.user.login and
-  # the replacement completes, so a PR-only key would no longer strand anything --
-  # but the keying stays, because being cancelled between approving and arming is
-  # still a worse outcome than running twice, and arming twice is a no-op.
+  # A PR-only key would not strand the pull request: the job gate reads
+  # pull_request.user.login rather than github.actor, so the replacement run
+  # completes. The keying stays because being cancelled between approving and arming
+  # is a worse outcome than running twice, and arming twice is a no-op.
   #
   # Same-actor supersession still collapses, which is what cancel-in-progress is
   # here for: the opened/labeled event burst and dependabot's own rebase force-push
@@ -44,13 +42,11 @@ concurrency:
 jobs:
   bot-automerge:
     runs-on: ubuntu-latest
-    # Reads pull_request.user.login rather than github.actor, and that swap has a
-    # consequence worth stating because it is not obvious. github.actor is whoever
-    # triggered *this event*, so the dist push below made the resulting synchronize
-    # event's actor the App and this job skipped -- which is why the concurrency note
-    # above describes approval and auto-merge never running for anyone. user.login
-    # stays dependabot[bot] for the life of the pull request, so the job now *does*
-    # re-run after its own dist push.
+    # Reads pull_request.user.login rather than github.actor. github.actor is whoever
+    # triggered *this event*, and the dist push below makes the App the actor of the
+    # resulting synchronize event, so a gate on it would skip that run and leave
+    # approval and auto-merge to nobody. user.login stays the opening bot's login for
+    # the life of the pull request, so the job re-runs after its own dist push.
     #
     # That terminates rather than looping: the rebuild is idempotent, so the second
     # run finds dist current, commits nothing, pushes nothing, and simply arms again.
@@ -166,16 +162,22 @@ jobs:
           # `reason=valid`, and a Dependabot commit reports `author=dependabot[bot]` with
           # the same committer -- so both are admitted and a locally pushed commit is not.
           #
-          # The payload test stays as an independent second condition rather than as the
-          # argument, because on its own it would rest on an unstated premise about when
+          # The payload test is an independent second condition rather than the argument,
+          # because on its own it would rest on an unstated premise about when
           # GitHub declines to mark a commit verified.
           #
-          # Merges are exempt from the author check but not from the signature check, and
-          # that pairing is what makes the exemption safe. A merge commit's tree is not
-          # constrained to be the mechanical merge of its parents, so a local "evil merge"
-          # can carry content present in neither parent while contributing no non-merge
-          # commits to the range. Requiring GitHub's signature rules that out, which is what
-          # lets a required Update branch merge through without reopening the hole.
+          # Merges are exempt from the author check but not from the signature check. A
+          # merge commit's tree is not constrained to be the mechanical merge of its
+          # parents, so a local "evil merge" can carry content present in neither parent
+          # while contributing no non-merge commits to the range; requiring GitHub's
+          # signature rules that one out. It does not rule out every crafted merge: GitHub
+          # also signs commits that an App or `GITHUB_TOKEN` creates through its API, which
+          # accepts any tree and any parents. So the exemption trusts whoever holds a write
+          # token for this repository. Where the base branch requires approval of the most
+          # recent push, the approval below does not count on a commit github-actions
+          # pushed, which bounds what the default token can do; an App's key is trusted as
+          # far as any write credential is. The exemption is what lets a required Update
+          # branch merge through.
           #
           # `set -e` does the fail-closed work. Every hand-written error branch here would
           # be a way to fail open instead, so there is no `2>/dev/null` and no `|| fallback`.
@@ -255,21 +257,18 @@ jobs:
               # workflow no pull request executes -- a release, publish or scheduled job, or
               # a step whose condition is false on a bot pull request -- merges with nothing
               # having exercised it, and so does a dependency major on a path CI does not
-              # cover. A break there surfaces the next time that code runs, and is fixed
-              # forward. Here that includes the release, marketplace and template-sync
-              # workflows, which run after a merge, on a release or on a schedule, so a break
-              # in one of them surfaces there rather than on the pull request that caused it.
+              # cover. A break there surfaces the next time that code runs, rather than on
+              # the pull request that caused it, and is fixed forward.
               #
               # The cooldowns in dependabot.yml are the soak: Dependabot raises no pull
-              # request for a release until its cooldown has passed. Their effective length
-              # is longer than the number suggests for actions, which is worth knowing before
-              # tuning it: that ecosystem is polled on the 1st and 15th, so an update whose
-              # cooldown expires just after a poll waits until the next one. Thirty days of
-              # cooldown therefore lands a pull request roughly thirty to forty-five days
-              # after the release.
+              # request for a release until its cooldown has passed. For an ecosystem polled
+              # less often than daily the effective soak is longer than the number, which is
+              # worth knowing before tuning it: an update whose cooldown expires just after a
+              # poll waits for the next one, so the delay is the cooldown plus up to one
+              # polling interval.
               #
-              # Nothing here reads the ecosystem except the log line. If a test on it ever
-              # returns, compare against fetch-metadata's slugs and not the keys
+              # Nothing here reads the ecosystem except the log line. If a test on it is
+              # ever added, compare against fetch-metadata's slugs and not the keys
               # dependabot.yml is written in: the action takes package-ecosystem from the
               # branch name, so it reports `github_actions` and `npm_and_yarn`, never
               # `github-actions` or `npm`. A comparison against a config key does not fail
@@ -283,10 +282,10 @@ jobs:
               echo "should_merge=false" >>"$GITHUB_OUTPUT"
               ;;
           esac
-      # The rebuild above pushes a new head, and the ruleset dismisses stale
-      # reviews on push. Approving before the PR object repoints binds the
-      # review to the pre-push SHA, so the dismissal that fires for our own
-      # push immediately voids it -- leaving auto-merge armed behind a
+      # The rebuild above can push a new head. Where the base branch dismisses
+      # stale reviews on push, approving before the PR object repoints binds
+      # the review to the pre-push SHA, so the dismissal that fires for our
+      # own push immediately voids it -- leaving auto-merge armed behind a
       # REVIEW_REQUIRED nothing will ever satisfy. Converge on the real tip
       # first. Git refs are strongly consistent, so the ref store is the
       # source of truth while the PR object catches up.

@@ -9,11 +9,6 @@ name: Bot auto-merge disarm
 # server-side, so a label applied afterwards stops the workflow from running again while
 # GitHub still merges the moment requirements pass. Something has to actively turn it off.
 #
-# New file. Until now bot-automerge.yml armed auto-merge here with nothing able to take it
-# back: the label was tested before arming and never again, so applying it afterwards
-# stopped the workflow re-running while GitHub went on merging the moment requirements
-# passed. The kill switch existed in the condition and not in the world.
-#
 # No branch filter and no fork guard, deliberately. A suppressor must be at least as broad
 # as the thing it suppresses, and disarming a pull request that was never armed is a no-op
 # -- so the cheap failure is running when it need not, and the expensive one is declining to
@@ -80,7 +75,7 @@ jobs:
             # includes the probe having failed and left $armed empty. Only confirmed-off
             # exits above. Gating this on "true" would mean a transient error skipped the
             # attempt entirely and left the pull request armed -- the outcome this
-            # workflow exists to prevent, and the one the previous version produced.
+            # workflow exists to prevent.
             gh pr merge --disable-auto "$PR_NUMBER" || true
             echo "::warning::attempt ${attempt}: auto-merge not yet confirmed off on #${PR_NUMBER}."
             sleep 5
