@@ -58,7 +58,6 @@ jobs:
             exit 1
           fi
 
-      # No `if:` and no fallback: the step above fails the job without the credential.
       - name: Mint app token
         id: app-token
         uses: actions/create-github-app-token@v3

@@ -9,9 +9,8 @@ on:
 #
 # Hands-free dist commits need the App: the `APP_CLIENT_ID` variable, and the
 # `APP_PRIVATE_KEY` secret in both the Actions and Dependabot stores, since
-# Dependabot-triggered runs read only the Dependabot store. Both tokens' API commits are
-# signed by GitHub, but only the App's start CI; without the App, armed auto-merge waits
-# until someone re-runs the checks.
+# Dependabot-triggered runs read only the Dependabot store. A commit under `GITHUB_TOKEN`
+# starts no CI.
 
 permissions:
   contents: write
@@ -20,9 +19,8 @@ permissions:
 
 concurrency:
   # Keyed on the actor too: the App's dist push starts a run as the App, which on a
-  # PR-only key would cancel this one, possibly between approving and arming. Running
-  # twice is better, and arming twice is a no-op. Runs from one actor still cancel each
-  # other, as with Dependabot's opened/labeled burst and its rebase force-push.
+  # PR-only key would cancel this one, possibly between approving and arming. Arming twice
+  # is a no-op.
   group: bot-automerge-${{ github.event.pull_request.number }}-${{ github.actor }}
   cancel-in-progress: true
 
@@ -92,9 +90,7 @@ jobs:
             echo "level=warning" >> "$GITHUB_OUTPUT"
           fi
       # `APP_CLIENT_ID` is the App's client ID, which the action reads from `app-id` when
-      # `client-id` is unset. It is a variable, not a secret, so that `if:` can test it.
-      # Only the dist commit uses this token; the label read, the approval and the arming
-      # run as github-actions, and the approval step says why.
+      # `client-id` is unset. Only the dist commit uses this token.
       - name: Mint app token
         id: app-token
         if: vars.APP_CLIENT_ID != '' && env.APP_KEY_SET == 'true'
@@ -123,20 +119,16 @@ jobs:
           # allow-list stays closed: renaming the App means editing this line, on purpose.
           BUILDER: boilerplate-sync-bot[bot]
         run: |
-          # Every commit must be created by GitHub and, unless it is a merge, authored by
-          # the bot that opened the pull request or by `BUILDER`. The author login alone
-          # proves nothing: it is resolved from the author email, which any pusher can set.
-          # The `web-flow` committer and the signed payload's committer line are both
-          # required, so the check does not rest on either alone.
+          # The author login alone proves nothing: it is resolved from the author email,
+          # which any pusher can set. So every commit must also be created by GitHub.
           #
-          # Merges are exempt from the author check so that Update branch merges pass.
-          # GitHub also signs commits that an App or `GITHUB_TOKEN` creates through its
-          # API, which accepts any tree and parents, so the exemption trusts any holder of
-          # a write token. Where the base branch requires approval of the most recent push,
-          # the approval below cannot count on a commit github-actions pushed.
+          # Merges skip the author check so that Update branch merges pass.
+          # GitHub also signs commits that an App or `GITHUB_TOKEN` creates through its API,
+          # with any tree and parents, so this trusts any holder of a write token. Where the
+          # base branch requires approval of the most recent push, the approval below does
+          # not count on a commit github-actions pushed.
           #
-          # Fails closed: nothing is swallowed, so a failed query leaves `trusted` unset and
-          # every later step skips.
+          # Fails closed: a failed query leaves `trusted` unset, and every later step skips.
           set -euo pipefail
           jq_rows='.[] | [
             (if (.commit.verification.verified == true)
@@ -202,13 +194,8 @@ jobs:
               echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
             version-update:semver-major)
-              # Majors merge on green CI too. CI exercises only code a pull request runs, so
-              # a major used only in a workflow no pull request starts merges unexercised
-              # and is fixed forward; the cooldowns in dependabot.yml are the only delay.
-              #
-              # fetch-metadata reports ecosystems as branch-name slugs (`github_actions`,
-              # `npm_and_yarn`), not dependabot.yml keys. A test against a config key never
-              # matches, and every major then falls through to a hold without failing.
+              # CI exercises only code a pull request runs, so a major used only by a
+              # workflow that no pull request starts merges untested.
               echo "::notice::${ECOSYSTEM:-unknown} major; eligible on green CI."
               echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
@@ -217,11 +204,9 @@ jobs:
               echo "should_merge=false" >>"$GITHUB_OUTPUT"
               ;;
           esac
-      # The rebuild can push a new head. Where the base branch dismisses stale reviews on
-      # push, an approval made before the PR object repoints is bound to the pre-push head
-      # and dismissed by that push, leaving auto-merge armed behind a review nothing
-      # supplies. So wait for the PR object to reach the tip, read from git, whose refs are
-      # strongly consistent.
+      # The rebuild can push a new head, and where stale reviews are dismissed on push, an
+      # approval bound to the old head is dismissed. Wait for the PR object to reach the
+      # tip, read from git, whose refs are strongly consistent.
       - name: Wait for the PR head to match the pushed commit
         id: head
         if: steps.eligible.outputs.should_merge == 'true'
@@ -229,7 +214,7 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           # Through git, not REST: a URL path would truncate or misdecode a ref name with
-          # `#` or `%`. ls-remote fetches no objects, so the local checkout does not matter.
+          # `#` or `%`.
           TIP=$(git ls-remote --exit-code origin "refs/heads/${HEAD_REF}" | cut -f1)
           echo "::debug::branch tip is $TIP"
           for _ in $(seq 1 30); do
@@ -263,12 +248,9 @@ jobs:
             echo "proceed=true" >>"$GITHUB_OUTPUT"
           fi
 
-      # The approval is github-actions' and never the App's, so `GH_TOKEN` is set here
-      # rather than inherited. Where the base branch requires approval of the most recent
-      # push, only an identity other than the last pusher counts, and the App pushes the
-      # dist commit. Without the App, github-actions pushes it, its own approval does not
-      # count, and auto-merge waits for a person. A refused approval fails this step before
-      # arming, with the same result.
+      # Approve as github-actions, never as the App: where the base branch requires
+      # approval of the most recent push, the last pusher's approval does not count, and
+      # the App pushes the dist commit.
       - name: Approve PR
         if: steps.switch.outputs.proceed == 'true'
         env:

@@ -1,10 +1,8 @@
 ---
 name: App token check
 
-# On-demand check of the App credential bot-automerge uses: mints a token from
-# `vars.APP_CLIENT_ID` and the Actions-store `secrets.APP_PRIVATE_KEY`, then reads the
-# repository with it. The token carries whatever the App is granted. The Dependabot-store
-# copy of the key cannot be checked here: only a Dependabot-triggered run reads that store.
+# Checks the Actions-store copy of the App credential. Only a Dependabot-triggered run
+# reads the Dependabot-store copy, so this cannot check it.
 
 on:
   workflow_dispatch:
