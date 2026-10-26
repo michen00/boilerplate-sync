@@ -53,10 +53,10 @@ jobs:
       # app-token-check.yml.
       - name: Require the App credential
         env:
-          APP_ID: ${{ vars.APP_ID }}
+          APP_CLIENT_ID: ${{ vars.APP_CLIENT_ID }}
         run: |
-          if [ -z "$APP_ID" ] || [ "$APP_KEY_SET" != "true" ]; then
-            echo "::error::Set vars.APP_ID and secrets.APP_PRIVATE_KEY first."
+          if [ -z "$APP_CLIENT_ID" ] || [ "$APP_KEY_SET" != "true" ]; then
+            echo "::error::Set vars.APP_CLIENT_ID and secrets.APP_PRIVATE_KEY first."
             echo "::error::A release PR opened by GITHUB_TOKEN receives no"
             echo "::error::check runs and can never satisfy main-protect."
             exit 1
@@ -69,7 +69,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.APP_ID }}
+          app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@v7

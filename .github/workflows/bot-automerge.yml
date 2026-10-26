@@ -7,9 +7,10 @@ on:
 
 # A ruleset that requires status checks to pass should be configured for the repository.
 #
-# Hands-free dist commits need a GitHub App credential: set the APP_ID repo
-# variable and the APP_PRIVATE_KEY secret in BOTH stores (Actions and
-# Dependabot — dependabot-triggered runs only see Dependabot secrets).
+# Hands-free dist commits need a GitHub App credential: set the APP_CLIENT_ID
+# repo variable to the App's client ID (`Iv23li...`), and the APP_PRIVATE_KEY
+# secret in BOTH stores (Actions and Dependabot — dependabot-triggered runs
+# only see Dependabot secrets).
 # App-token API pushes are GitHub-signed and re-fire pull_request CI.
 # Without the App, the commit falls back to GITHUB_TOKEN: still verified,
 # but CI does not re-fire on the new head and the armed auto-merge waits
@@ -115,12 +116,19 @@ jobs:
           else
             echo "level=warning" >> "$GITHUB_OUTPUT"
           fi
+      # `APP_CLIENT_ID` holds the App's client ID (`Iv23li...`). It goes in `app-id`, which
+      # `create-github-app-token` reads as the client ID when `client-id` is unset. It is a
+      # variable rather than a secret because `if:` can read `vars` and cannot read
+      # `secrets`, and that test is what keeps this path optional.
+      #
+      # Only the dist commit and the arming may use this token. The label read and the
+      # approval run as github-actions, never as the App; the approval step says why.
       - name: Mint app token
         id: app-token
-        if: vars.APP_ID != '' && env.APP_KEY_SET == 'true'
+        if: vars.APP_CLIENT_ID != '' && env.APP_KEY_SET == 'true'
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.APP_ID }}
+          app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Commit build changes
         id: commit
@@ -316,6 +324,8 @@ jobs:
       - name: Re-check the kill switch
         id: switch
         if: steps.eligible.outputs.should_merge == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Read into a variable first, under `set -e`. Piping the query straight into grep
           # would treat a failed query as "label absent" -- grep sees no input, matches
@@ -332,9 +342,21 @@ jobs:
             echo "proceed=true" >>"$GITHUB_OUTPUT"
           fi
 
+      # Where the base branch requires an approving review, no bot pull request can supply
+      # one for itself, so without this approval auto-merge would arm and wait
+      # indefinitely; where none is required, the approval is redundant. It is always the
+      # default token's (github-actions[bot]) and never the App's, so GH_TOKEN is pinned
+      # here rather than inherited. Where the base branch requires approval of the most
+      # recent push, an approval counts only from an identity other than the one that
+      # pushed last, and the App is the identity that pushes the dist commit above, so an
+      # App approval would not count on that commit. Without the App, a dist commit is
+      # pushed by github-actions itself and this approval does not count on it either;
+      # auto-merge then waits for a person. A refused approval fails this step before
+      # arming, which also leaves the pull request to a person.
       - name: Approve PR
         if: steps.switch.outputs.proceed == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ steps.head.outputs.sha }}
         run: |
           REVIEW_STATE=$(gh pr view "$PR_NUMBER" --json reviewDecision -q .reviewDecision)
