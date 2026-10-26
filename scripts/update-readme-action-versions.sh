@@ -30,7 +30,7 @@ README="${1:-README.md}"
 SELF="michen00/boilerplate-sync"
 changed=false
 
-if [[ ! -f "$README" ]]; then
+if [[ ! -f $README ]]; then
   echo "Error: $README not found" >&2
   exit 1
 fi
@@ -39,7 +39,7 @@ fi
 latest_major() {
   local repo="$1" tag
   tag=$(gh api "repos/${repo}/releases/latest" --jq '.tag_name' 2> /dev/null || true)
-  [[ -z "$tag" ]] && return 0
+  [[ -z $tag ]] && return 0
   printf '%s' "$tag" | sed -E 's/^v?([0-9]+).*/\1/'
 }
 
@@ -54,11 +54,11 @@ if [[ ${#refs[@]} -gt 0 ]]; then
     repo="${ref%@*}"
     cur="${ref##*@v}"
     latest=$(latest_major "$repo")
-    if [[ -z "$latest" ]]; then
+    if [[ -z $latest ]]; then
       echo "::warning::no latest release for ${repo}; leaving @v${cur}"
       continue
     fi
-    if [[ "$latest" =~ ^[0-9]+$ ]] && ((10#$latest > 10#$cur)); then
+    if [[ $latest =~ ^[0-9]+$ ]] && ((10#$latest > 10#$cur)); then
       echo "Bump ${repo}: v${cur} -> v${latest}"
       # Escape the literal '.' (the only ERE metacharacter a GitHub repo name
       # can contain) via Bash parameter expansion -- no subshell, and Bash 4+
@@ -74,9 +74,9 @@ fi
 
 # --- 2. SHA-pinned self example -> latest release commit + tag ---
 self_tag=$(gh api "repos/${SELF}/releases/latest" --jq '.tag_name' 2> /dev/null || true)
-if [[ -n "$self_tag" ]]; then
+if [[ -n $self_tag ]]; then
   self_sha=$(gh api "repos/${SELF}/commits/${self_tag}" --jq '.sha' 2> /dev/null || true)
-  if [[ "$self_sha" =~ ^[0-9a-f]{40}$ ]] &&
+  if [[ $self_sha =~ ^[0-9a-f]{40}$ ]] &&
     grep -qE "${SELF}@[0-9a-f]{40} # v[0-9][0-9.]*" "$README" &&
     ! grep -qF "${SELF}@${self_sha} # ${self_tag}" "$README"; then
     echo "Bump SHA example -> ${self_sha} (${self_tag})"
@@ -89,6 +89,6 @@ if [[ -n "$self_tag" ]]; then
 fi
 
 echo "changed=${changed}"
-if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+if [[ -n ${GITHUB_OUTPUT:-} ]]; then
   echo "changed=${changed}" >> "$GITHUB_OUTPUT"
 fi
