@@ -86,18 +86,7 @@ repos:
     rev: v1.9.6
     hooks:
       - id: tombi-format
-  # One paragraph is one line, so a diff to a paragraph is one line. Ordered
-  # before markdownlint below so that what markdownlint --fix sees is the
-  # final text rather than a shape about to change under it.
-  #
-  # Does not collide with markdownlint or prettier: it leaves code fences,
-  # tables, lists, front matter, hard breaks, and label rows untouched, and
-  # tables are the only thing either of those two touch in this tree (see
-  # .prettierignore for why prettier is kept off markdown entirely).
-  #
-  # The writing id, not the `-check` one: nothing else in this tree reflows
-  # prose, so the hook can hold the convention instead of only reporting on
-  # it.
+  # Before markdownlint, so its --fix sees the final text; nothing here rewraps prose.
   - repo: https://github.com/michen00/markdown-prose-hooks-py
     rev: v0.5.2
     hooks:
