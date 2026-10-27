@@ -5,15 +5,12 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
-# A ruleset that requires status checks to pass should be configured for the repository.
+# The repository needs a ruleset that requires status checks to pass.
 #
-# Hands-free dist commits need a GitHub App credential: set the APP_ID repo
-# variable and the APP_PRIVATE_KEY secret in BOTH stores (Actions and
-# Dependabot — dependabot-triggered runs only see Dependabot secrets).
-# App-token API pushes are GitHub-signed and re-fire pull_request CI.
-# Without the App, the commit falls back to GITHUB_TOKEN: still verified,
-# but CI does not re-fire on the new head and the armed auto-merge waits
-# until a maintainer re-triggers checks.
+# Hands-free dist commits need the App: the `APP_CLIENT_ID` variable, and the
+# `APP_PRIVATE_KEY` secret in both the Actions and Dependabot stores, since
+# Dependabot-triggered runs read only the Dependabot store. A commit under `GITHUB_TOKEN`
+# starts no CI.
 
 permissions:
   contents: write
@@ -21,40 +18,19 @@ permissions:
   pull-requests: write
 
 concurrency:
-  # Keyed by actor as well as PR. The dist rebuild below pushes with an App token,
-  # and that push re-fires pull_request/synchronize under a *different* actor. On a
-  # PR-only key that run joins this run's group and cancels us mid-flight: run
-  # 30679210030 was cancelled by 30679291569 (actor boilerplate-sync-bot[bot]) 5s
-  # after its own push, on every dist push observed.
-  #
-  # The consequence used to be worse than a cancellation. The job gate read
-  # github.actor, so the replacement run skipped as well, and approval and
-  # auto-merge then ran for nobody. That gate now reads pull_request.user.login and
-  # the replacement completes, so a PR-only key would no longer strand anything --
-  # but the keying stays, because being cancelled between approving and arming is
-  # still a worse outcome than running twice, and arming twice is a no-op.
-  #
-  # Same-actor supersession still collapses, which is what cancel-in-progress is
-  # here for: the opened/labeled event burst and dependabot's own rebase force-push
-  # both arrive as dependabot[bot].
+  # Keyed on the actor too: the App's dist push starts a run as the App, which on a
+  # PR-only key would cancel this one, possibly between approving and arming. Arming twice
+  # is a no-op.
   group: bot-automerge-${{ github.event.pull_request.number }}-${{ github.actor }}
   cancel-in-progress: true
 
 jobs:
   bot-automerge:
     runs-on: ubuntu-latest
-    # Reads pull_request.user.login rather than github.actor, and that swap has a
-    # consequence worth stating because it is not obvious. github.actor is whoever
-    # triggered *this event*, so the dist push below made the resulting synchronize
-    # event's actor the App and this job skipped -- which is why the concurrency note
-    # above describes approval and auto-merge never running for anyone. user.login
-    # stays dependabot[bot] for the life of the pull request, so the job now *does*
-    # re-run after its own dist push.
-    #
-    # That terminates rather than looping: the rebuild is idempotent, so the second
-    # run finds dist current, commits nothing, pushes nothing, and simply arms again.
-    # Arming twice is a no-op. What it does mean is that the provenance step below
-    # sees the dist commit, which is why that step accepts a second author.
+    # The guard reads `pull_request.user.login`, not `github.actor`: the actor is whoever
+    # caused this event, so a later push by anyone else, the App's dist push included,
+    # would skip the job. The re-run after a dist push terminates: the rebuild is
+    # idempotent, so it pushes nothing and arms again, which is a no-op.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       (github.event.pull_request.user.login == 'dependabot[bot]' ||
@@ -64,8 +40,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      # GitHub's documented context-availability table excludes secrets
-      # from if expressions (actionlint enforces it); hoist presence here.
+      # `if:` cannot read `secrets`, so the key's presence is exposed here.
       APP_KEY_SET: ${{ secrets.APP_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v7
@@ -106,8 +81,7 @@ jobs:
             if [ "$DEPENDENCY_TYPE" = "direct:development" ]; then
               echo "level=notice" >> "$GITHUB_OUTPUT"
             elif [ "$DEPENDENCY_TYPE" = "direct:production" ]; then
-              # A no-op rebuild is benign; CI's dist-up-to-date check is the
-              # real staleness gate. Keep it visible without failing the run.
+              # Warn, not fail: no commit is harmless, as CI checks that `dist` is current.
               echo "level=warning" >> "$GITHUB_OUTPUT"
             else
               echo "level=warning" >> "$GITHUB_OUTPUT"
@@ -115,12 +89,14 @@ jobs:
           else
             echo "level=warning" >> "$GITHUB_OUTPUT"
           fi
+      # `APP_CLIENT_ID` is the App's client ID, which the action reads from `app-id` when
+      # `client-id` is unset. Only the dist commit uses this token.
       - name: Mint app token
         id: app-token
-        if: vars.APP_ID != '' && env.APP_KEY_SET == 'true'
+        if: vars.APP_CLIENT_ID != '' && env.APP_KEY_SET == 'true'
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.APP_ID }}
+          app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Commit build changes
         id: commit
@@ -139,38 +115,20 @@ jobs:
           GH_TOKEN: ${{ env.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
-          # The dist rebuild above commits as the App, so its commits are authored by a
-          # third identity that is neither the pull request author nor a merge. Naming it
-          # here rather than accepting any bot keeps the allow-list closed: renaming the
-          # App means editing this line, and that coupling is the point.
+          # Author of the App's dist commits. Named, rather than admitting any bot, so the
+          # allow-list stays closed: renaming the App means editing this line, on purpose.
           BUILDER: boilerplate-sync-bot[bot]
         run: |
-          # Every commit must have been created by GitHub itself, and be authored either by
-          # the bot that opened the pull request or by this repository's own dist builder,
-          # unless it is a merge.
+          # The author login alone proves nothing: it is resolved from the author email,
+          # which any pusher can set. So every commit must also be created by GitHub.
           #
-          # `.committer.login == "web-flow"` is the load-bearing half. GitHub resolves that
-          # field from the signing key itself, so it is not git metadata a pusher can set.
-          # The author test cannot carry this weight: `.author.login` resolves from the
-          # commit's author email, so anyone who can push here can set it to a bot's noreply
-          # address. Measured on this repository's own history: a dist commit reports
-          # `author=boilerplate-sync-bot[bot]`, `committer=web-flow`, `verified=true`,
-          # `reason=valid`, and a Dependabot commit reports `author=dependabot[bot]` with
-          # the same committer -- so both are admitted and a locally pushed commit is not.
+          # Merges skip the author check so that Update branch merges pass.
+          # GitHub also signs commits that an App or `GITHUB_TOKEN` creates through its API,
+          # with any tree and parents, so this trusts any holder of a write token. Where the
+          # base branch requires approval of the most recent push, the approval below does
+          # not count on a commit github-actions pushed.
           #
-          # The payload test stays as an independent second condition rather than as the
-          # argument, because on its own it would rest on an unstated premise about when
-          # GitHub declines to mark a commit verified.
-          #
-          # Merges are exempt from the author check but not from the signature check, and
-          # that pairing is what makes the exemption safe. A merge commit's tree is not
-          # constrained to be the mechanical merge of its parents, so a local "evil merge"
-          # can carry content present in neither parent while contributing no non-merge
-          # commits to the range. Requiring GitHub's signature rules that out, which is what
-          # lets a required Update branch merge through without reopening the hole.
-          #
-          # `set -e` does the fail-closed work. Every hand-written error branch here would
-          # be a way to fail open instead, so there is no `2>/dev/null` and no `|| fallback`.
+          # Fails closed: a failed query leaves `trusted` unset, and every later step skips.
           set -euo pipefail
           jq_rows='.[] | [
             (if (.commit.verification.verified == true)
@@ -182,9 +140,8 @@ jobs:
             (if (.parents | length) >= 2 then "merge" else "plain" end),
             (.author.login // "<none>")
           ] | join("|")'
-          # This endpoint returns at most 250 commits and `--paginate` still exits 0, so a
-          # longer pull request would be inspected only in part and the unseen tail could be
-          # anything. Count first and refuse rather than under-inspect.
+          # The endpoint returns at most 250 commits and still exits 0, so refuse rather
+          # than inspect part of the pull request.
           total=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" --jq '.commits')
           if [ "$total" -gt 250 ]; then
             echo "::warning::${total} commits exceeds the 250 this API returns; holding."
@@ -237,36 +194,8 @@ jobs:
               echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
             version-update:semver-major)
-              # Majors merge on green too, in every ecosystem and with no exceptions. A major
-              # is accepted once every required check passes: the latest version is almost
-              # always the one wanted, and a major held for a person is a merge somebody has
-              # to remember to make.
-              #
-              # The trade-off is accepted rather than overlooked. Green CI is evidence only
-              # about code a pull request runs. An actions major whose `uses:` line sits in a
-              # workflow no pull request executes -- a release, publish or scheduled job, or
-              # a step whose condition is false on a bot pull request -- merges with nothing
-              # having exercised it, and so does a dependency major on a path CI does not
-              # cover. A break there surfaces the next time that code runs, and is fixed
-              # forward. Here that includes the release, marketplace and template-sync
-              # workflows, which run after a merge, on a release or on a schedule, so a break
-              # in one of them surfaces there rather than on the pull request that caused it.
-              #
-              # The cooldowns in dependabot.yml are the soak: Dependabot raises no pull
-              # request for a release until its cooldown has passed. Their effective length
-              # is longer than the number suggests for actions, which is worth knowing before
-              # tuning it: that ecosystem is polled on the 1st and 15th, so an update whose
-              # cooldown expires just after a poll waits until the next one. Thirty days of
-              # cooldown therefore lands a pull request roughly thirty to forty-five days
-              # after the release.
-              #
-              # Nothing here reads the ecosystem except the log line. If a test on it ever
-              # returns, compare against fetch-metadata's slugs and not the keys
-              # dependabot.yml is written in: the action takes package-ecosystem from the
-              # branch name, so it reports `github_actions` and `npm_and_yarn`, never
-              # `github-actions` or `npm`. A comparison against a config key does not fail
-              # loudly. It never matches, every major it was meant to arm falls through to a
-              # hold, and the run stays green.
+              # CI exercises only code a pull request runs, so a major used only by a
+              # workflow that no pull request starts merges untested.
               echo "::notice::${ECOSYSTEM:-unknown} major; eligible on green CI."
               echo "should_merge=true" >>"$GITHUB_OUTPUT"
               ;;
@@ -275,24 +204,17 @@ jobs:
               echo "should_merge=false" >>"$GITHUB_OUTPUT"
               ;;
           esac
-      # The rebuild above pushes a new head, and the ruleset dismisses stale
-      # reviews on push. Approving before the PR object repoints binds the
-      # review to the pre-push SHA, so the dismissal that fires for our own
-      # push immediately voids it -- leaving auto-merge armed behind a
-      # REVIEW_REQUIRED nothing will ever satisfy. Converge on the real tip
-      # first. Git refs are strongly consistent, so the ref store is the
-      # source of truth while the PR object catches up.
+      # The rebuild can push a new head, and where stale reviews are dismissed on push, an
+      # approval bound to the old head is dismissed. Wait for the PR object to reach the
+      # tip, read from git, whose refs are strongly consistent.
       - name: Wait for the PR head to match the pushed commit
         id: head
         if: steps.eligible.outputs.should_merge == 'true'
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          # Read the tip through git rather than a REST path. Ref names may
-          # legally contain '#' and '%' (git check-ref-format allows both),
-          # which a URL path segment would truncate or misdecode into a
-          # different ref. ls-remote transfers no objects, so the shallow
-          # clone and update-local:false do not matter here.
+          # Through git, not REST: a URL path would truncate or misdecode a ref name with
+          # `#` or `%`.
           TIP=$(git ls-remote --exit-code origin "refs/heads/${HEAD_REF}" | cut -f1)
           echo "::debug::branch tip is $TIP"
           for _ in $(seq 1 30); do
@@ -306,25 +228,19 @@ jobs:
           done
           echo "::error::PR head never converged on $TIP"
           exit 1
-      # No wait step for checks: auto-merge waits for required checks
-      # server-side, and make check above already validated the tree.
-      # The label is re-read live here rather than taken from the event payload. A label
-      # applied while this run was in flight is not in that payload, and this run is long --
-      # it builds, installs hooks, runs `make check` and waits for the head to converge --
-      # so the window is wide. Without this the pull request could be armed with the kill
-      # switch already applied.
+      # No wait for checks: auto-merge waits for required checks server-side.
+      # Re-read the label: one applied during this run is not in the event payload, so the
+      # pull request could otherwise be armed with the kill switch applied.
       - name: Re-check the kill switch
         id: switch
         if: steps.eligible.outputs.should_merge == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Read into a variable first, under `set -e`. Piping the query straight into grep
-          # would treat a failed query as "label absent" -- grep sees no input, matches
-          # nothing, and the run proceeds without having verified the switch at all.
+          # Read into a variable under `set -e`, so a failed query is not read as "no label".
           set -euo pipefail
           labels=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name')
-          # Case-insensitive and fixed-string, matching how GitHub treats label names:
-          # they are unique case-insensitively, so "Do Not Auto-Merge" is the same switch
-          # to a human and has to be to this check too.
+          # Case-insensitive, as GitHub compares label names.
           if grep -qixF 'do not auto-merge' <<< "$labels"; then
             echo "::warning::do not auto-merge applied since this run started; not arming."
             echo "proceed=false" >>"$GITHUB_OUTPUT"
@@ -332,9 +248,13 @@ jobs:
             echo "proceed=true" >>"$GITHUB_OUTPUT"
           fi
 
+      # Approve as github-actions, never as the App: where the base branch requires
+      # approval of the most recent push, the last pusher's approval does not count, and
+      # the App pushes the dist commit.
       - name: Approve PR
         if: steps.switch.outputs.proceed == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ steps.head.outputs.sha }}
         run: |
           REVIEW_STATE=$(gh pr view "$PR_NUMBER" --json reviewDecision -q .reviewDecision)
@@ -343,8 +263,7 @@ jobs:
             exit 0
           fi
           echo "::notice::Approving $HEAD_SHA ..."
-          # Pin the review to the exact head. An approval bound to the current
-          # head is not stale, so dismiss_stale_reviews_on_push leaves it be.
+          # Pinned to the head, so `dismiss_stale_reviews_on_push` does not dismiss it.
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" \
             -f "commit_id=$HEAD_SHA" \
             -f 'event=APPROVE' \
