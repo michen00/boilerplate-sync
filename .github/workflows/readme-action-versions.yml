@@ -31,15 +31,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: scripts/update-readme-action-versions.sh
 
-      # App token so the PR fires CI and can auto-merge hands-free, exactly
-      # like bot-automerge's dist commits. Falls back to GITHUB_TOKEN (the PR
-      # opens but waits for a manual merge) when the App is unconfigured.
+      # App token, so the pull request starts CI and can auto-merge. Without the App,
+      # `GITHUB_TOKEN` opens it, and it waits for a manual merge.
       - name: Mint app token
         id: app-token
-        if: steps.bump.outputs.changed == 'true' && vars.APP_ID != '' && env.APP_KEY_SET == 'true'
+        if: >-
+          steps.bump.outputs.changed == 'true' &&
+          vars.APP_CLIENT_ID != '' &&
+          env.APP_KEY_SET == 'true'
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.APP_ID }}
+          app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Open pull request
