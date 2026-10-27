@@ -82,6 +82,10 @@ repos:
     rev: v3.14.1-1
     hooks:
       - id: shfmt
+  - repo: https://github.com/tombi-toml/tombi-pre-commit
+    rev: v1.9.6
+    hooks:
+      - id: tombi-format
   # One paragraph is one line, so a diff to a paragraph is one line. Ordered
   # before markdownlint below so that what markdownlint --fix sees is the
   # final text rather than a shape about to change under it.
@@ -111,6 +115,10 @@ repos:
       - id: check-json
       - id: check-toml
       - id: check-yaml
+  - repo: https://github.com/tombi-toml/tombi-pre-commit
+    rev: v1.9.6
+    hooks:
+      - id: tombi-lint
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.38.0
     hooks:

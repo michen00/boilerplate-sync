@@ -93,10 +93,10 @@ add_entry() {
   local trimmed="$line"
   trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
   trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
-  [[ -z "$trimmed" ]] && return 0
-  if [[ "$trimmed" == "## "* ]]; then
+  [[ -z $trimmed ]] && return 0
+  if [[ $trimmed == "## "* ]]; then
     ENTRIES+=("$trimmed")
-  elif [[ "$trimmed" == \#* ]]; then
+  elif [[ $trimmed == \#* ]]; then
     return 0
   else
     ENTRIES+=("$trimmed")
@@ -106,7 +106,7 @@ add_entry() {
 
 parse_input_stream() {
   local line=""
-  while IFS= read -r line || [[ -n "$line" ]]; do
+  while IFS= read -r line || [[ -n $line ]]; do
     add_entry "$line"
   done
 }
@@ -144,7 +144,7 @@ done
 # If the only positional argument looks like an output path (e.g. .gitignore or
 # my-project/.gitignore), treat it as --output and use default URLs. Resolve relative
 # to the repo root containing the script so the same path is used regardless of cwd.
-if [[ -n "$INPUT_FILE" && ("$INPUT_FILE" == .gitignore || "$INPUT_FILE" == */.gitignore) && "$OUTPUT_FILE" == ".gitignore" ]]; then
+if [[ -n $INPUT_FILE && ($INPUT_FILE == .gitignore || $INPUT_FILE == */.gitignore) && $OUTPUT_FILE == ".gitignore" ]]; then
   SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
   if ! REPO_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2> /dev/null); then
     REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
@@ -155,8 +155,8 @@ fi
 
 # Determine the source of URLs.
 # Priority: explicit input file > stdin (pipe or redirection) > defaults.
-if [[ -n "$INPUT_FILE" ]]; then
-  if [[ -f "$INPUT_FILE" ]]; then
+if [[ -n $INPUT_FILE ]]; then
+  if [[ -f $INPUT_FILE ]]; then
     parse_input_stream < "$INPUT_FILE"
   else
     echo "Input file not found: $INPUT_FILE" >&2
@@ -178,7 +178,7 @@ fi
 # Calculate the length of the longest header line (for ruler)
 MAX_HEADER_LINE_LENGTH=0
 for entry in "${ENTRIES[@]}"; do
-  if [[ "$entry" == "## "* ]]; then
+  if [[ $entry == "## "* ]]; then
     HEADER_LINE="# ${entry#\#\# }"
   else
     HEADER_LINE="# - $entry"
@@ -193,7 +193,7 @@ HEADER_LENGTH=$MAX_HEADER_LINE_LENGTH
 HEADER=$(printf '#%.0s' $(seq 1 "$HEADER_LENGTH"))
 
 OUTPUT_DIR=$(dirname "$OUTPUT_FILE")
-if [[ ! -d "$OUTPUT_DIR" ]]; then
+if [[ ! -d $OUTPUT_DIR ]]; then
   mkdir -p "$OUTPUT_DIR" || {
     echo "Error: cannot create directory '$OUTPUT_DIR' for output file." >&2
     exit 1
@@ -204,7 +204,7 @@ fi
   echo "$HEADER"
   echo "# This .gitignore is composed of the following templates:"
   for entry in "${ENTRIES[@]}"; do
-    if [[ "$entry" == "## "* ]]; then
+    if [[ $entry == "## "* ]]; then
       echo "# ${entry#\#\# }"
     else
       echo "# - $entry"
@@ -219,7 +219,7 @@ echo "Initialized output file with header: $OUTPUT_FILE"
 # Convert blob URL to raw URL if needed (user-supplied input may use blob format)
 to_raw_url() {
   local u="$1"
-  if [[ "$u" == *"/blob/"* ]]; then
+  if [[ $u == *"/blob/"* ]]; then
     echo "$u" | sed 's|github.com|raw.githubusercontent.com|; s|/blob||'
   else
     echo "$u"
@@ -231,7 +231,7 @@ for url in "${URLS[@]}"; do
   echo "Processing URL: $url"
 
   RAW_URL=$(to_raw_url "$url")
-  if [[ "$url" != "$RAW_URL" ]]; then
+  if [[ $url != "$RAW_URL" ]]; then
     echo "Converted to raw URL: $RAW_URL"
   fi
 
@@ -257,7 +257,7 @@ for url in "${URLS[@]}"; do
     exit 1
   fi
 
-  if [[ ! -s "$TMP_CURL" ]]; then
+  if [[ ! -s $TMP_CURL ]]; then
     echo "Empty content from: $RAW_URL" >&2
     exit 1
   fi
@@ -267,8 +267,8 @@ for url in "${URLS[@]}"; do
   # Patterns use literal '<' / '<!'; store in vars so [[ =~ ]] does not parse '<' as redirection
   _html_doctype_re='^[[:space:]]*<![[:space:]]*[Dd][Oo][Cc][Tt][Yy][Pp][Ee]'
   _html_root_re='^[[:space:]]*<[Hh][Tt][Mm][Ll]'
-  if [[ "$content_prefix" =~ $_html_doctype_re ]] ||
-    [[ "$content_prefix" =~ $_html_root_re ]]; then
+  if [[ $content_prefix =~ $_html_doctype_re ]] ||
+    [[ $content_prefix =~ $_html_root_re ]]; then
     echo "Received HTML instead of gitignore content from: $RAW_URL" >&2
     exit 1
   fi

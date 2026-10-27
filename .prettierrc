@@ -3,5 +3,11 @@
   "htmlWhitespaceSensitivity": "strict",
   "jsxSingleQuote": true,
   "printWidth": 88,
-  "singleQuote": true
+  "singleQuote": true,
+  "overrides": [
+    {
+      "files": ["*.yaml", "*.yml"],
+      "options": { "printWidth": 100 }
+    }
+  ]
 }
