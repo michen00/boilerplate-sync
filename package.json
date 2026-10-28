@@ -40,8 +40,5 @@
   },
   "engines": {
     "node": ">=24"
-  },
-  "prettier": {
-    "singleQuote": true
   }
 }
