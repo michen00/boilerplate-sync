@@ -63,6 +63,7 @@ install: ## Install npm dependencies
 .PHONY: develop
 WITH_HOOKS ?= true
 develop: install ## Set up for development (WITH_HOOKS={true|false}, default=true)
+	@git config blame.ignoreRevsFile .git-blame-ignore-revs
 	@if [ "$(WITH_HOOKS)" = "true" ]; then \
         $(MAKE) enable-pre-commit; \
     fi
