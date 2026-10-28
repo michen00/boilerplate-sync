@@ -121,7 +121,7 @@ jobs:
           # The author login alone proves nothing: it is resolved from the author email,
           # which any pusher can set. So every commit must also be created by GitHub.
           #
-          # Merges skip the author check so that Update branch merges pass.
+          # Merges skip the author check so that Update branch and catch-up merges pass.
           # GitHub also signs commits that an App or `GITHUB_TOKEN` creates through its API,
           # with any tree and parents, so this trusts any holder of a write token. Where the
           # base branch requires approval of the most recent push, the approval below does
