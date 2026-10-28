@@ -89,14 +89,13 @@ jobs:
           else
             echo "level=warning" >> "$GITHUB_OUTPUT"
           fi
-      # `APP_CLIENT_ID` is the App's client ID, which the action reads from `app-id` when
-      # `client-id` is unset. Only the dist commit uses this token.
+      # Only the dist commit uses this token.
       - name: Mint app token
         id: app-token
         if: vars.APP_CLIENT_ID != '' && env.APP_KEY_SET == 'true'
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.APP_CLIENT_ID }}
+          client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Commit build changes
         id: commit
