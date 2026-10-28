@@ -8,6 +8,8 @@ ci:
     chore: autoupdate pre-commit hooks
 
     for more information, see https://pre-commit.ci
+  # tombi needs the network for its schema catalog; CI's pre-commit job runs it.
+  skip: [tombi-format, tombi-lint]
 
 default_install_hook_types:
   - commit-msg
