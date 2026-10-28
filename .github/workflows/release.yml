@@ -151,7 +151,6 @@ jobs:
       # createPullRequests reads it. See the header comment.
       - name: Publish the release and refresh the release PR
         id: release-please
-        # Pinned to a commit because it runs with a write token; Dependabot bumps it.
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}

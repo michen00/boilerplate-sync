@@ -61,7 +61,6 @@ jobs:
           echo '::notice::Changes staged. Proceeding with commit.'
           git push -u origin ${{ env.BRANCH_NAME }}
       - name: Commit changes
-        # Pinned to a commit because it runs with a write token; Dependabot bumps it.
         uses: iarekylew00t/verified-bot-commit@1ee4374942e5c5f814e9b3121d766cbe45cea360 # v2.3.6
         with:
           ref: ${{ env.BRANCH_NAME }}
@@ -115,7 +114,6 @@ jobs:
             return body;
       - name: Create pull request
         id: create-pr
-        # Pinned to a commit because it runs with a write token; Dependabot bumps it.
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           base: ${{ github.event.repository.default_branch }}
