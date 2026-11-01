@@ -42,4 +42,4 @@ jobs:
     # comment needs one, and the scope belongs on the calling job.
     permissions:
       pull-requests: write
-    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body-check.yml@v0.5.0
+    uses: michen00/markdown-prose-hooks/.github/workflows/unwrap-pr-body-check.yml@v0.5.1
