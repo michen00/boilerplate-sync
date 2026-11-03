@@ -373,8 +373,8 @@ export function parseHooksInput(hooksYaml: string): HooksConfig | undefined {
   };
 }
 
-/** Characters that end a shell word outside quotes */
-const SHELL_SEPARATORS = new Set([';', '|', '&', '<', '>', '(', ')']);
+/** Characters that end a shell word and the command, outside quotes */
+const SHELL_SEPARATORS = new Set([';', '|', '&', '(', ')']);
 
 /** Characters that are glob or brace syntax to bash when unquoted */
 const GLOB_CHARS = new Set(['*', '?', '[', ']', '{', '}', '\\']);
@@ -540,6 +540,15 @@ function splitShellTokens(command: string, substitutions: string[]): ShellWord[]
       } else if (next !== undefined) {
         literal(next);
         inWord = true;
+        i++;
+      }
+    } else if (ch === '<' || ch === '>' || (ch === '&' && next === '>')) {
+      // A redirection ends the word but not the command: the shell strips it
+      // before running the command, so `bash >/dev/null -c '...'` and
+      // `bash 2>&1 -c '...'` still run `bash -c`. Consume the `&` or `|`
+      // that belongs to the operator (`>&`, `<&`, `&>`, `>|`).
+      endWord();
+      if (next === '&' || next === '|' || (ch === '&' && next === '>')) {
         i++;
       }
     } else if (ch === '\n' || SHELL_SEPARATORS.has(ch)) {

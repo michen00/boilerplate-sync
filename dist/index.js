@@ -33330,7 +33330,7 @@ function parseHooksInput(hooksYaml) {
     postSync: "post-sync" in parsed ? parseHookCommands(parsed["post-sync"], "post-sync") : []
   };
 }
-var SHELL_SEPARATORS = /* @__PURE__ */ new Set([";", "|", "&", "<", ">", "(", ")"]);
+var SHELL_SEPARATORS = /* @__PURE__ */ new Set([";", "|", "&", "(", ")"]);
 var GLOB_CHARS = /* @__PURE__ */ new Set(["*", "?", "[", "]", "{", "}", "\\"]);
 var SHELL_GLOB_OPTIONS = {
   dot: false,
@@ -33434,6 +33434,11 @@ function splitShellTokens(command, substitutions) {
       } else if (next !== void 0) {
         literal2(next);
         inWord = true;
+        i++;
+      }
+    } else if (ch === "<" || ch === ">" || ch === "&" && next === ">") {
+      endWord();
+      if (next === "&" || next === "|" || ch === "&" && next === ">") {
         i++;
       }
     } else if (ch === "\n" || SHELL_SEPARATORS.has(ch)) {

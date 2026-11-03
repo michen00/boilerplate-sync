@@ -1265,3 +1265,21 @@ describe('transform key normalisation', () => {
     expect(() => validateHooks(hooks, sources)).not.toThrow();
   });
 });
+
+describe('redirections do not start a new command', () => {
+  const synced = new Set(['scripts/merge.sh']);
+  const find = (command: string) => findSyncedPathReferences(command, synced);
+
+  it('keeps tracking a shell across redirections before -c', () => {
+    expect(find("bash >/dev/null -c 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash 2>&1 -c 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("sh &>/dev/null -c 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash >|out.log -c 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash </dev/null -ec 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+  });
+
+  it('still ends a command at real separators', () => {
+    expect(find("echo x >log; jq -c '.[0] * .[1]' a.json")).toEqual([]);
+    expect(splitShellWords('a 2>&1 b')).toEqual(['a', '2', '1', 'b']);
+  });
+});
