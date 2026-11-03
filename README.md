@@ -16,6 +16,7 @@ A GitHub Action that keeps your project boilerplate files in sync with another r
 - 🔐 **Private repo support** - Use separate tokens for source repositories
 - 🔧 **Composable** - Pairs with [`peter-evans/create-pull-request`](https://github.com/peter-evans/create-pull-request) for PR creation
 - 📁 **Glob patterns** - Sync multiple files with patterns like `*.md` or `**/*.yml`
+- 🪝 **Lifecycle hooks** - Check the workspace before a sync, keep local changes to synced files with transforms, and run formatters or tests afterwards
 
 _Note: This action currently cannot sync `.github/workflows/*.y{,a}ml` files without additional permissions ([e.g.](https://github.com/actions/create-github-app-token)) and configuration (see [discussion](https://github.com/orgs/community/discussions/35410))._
 
@@ -107,6 +108,7 @@ jobs:
 | `github-token` | ✅ | `${{ github.token }}` | Token for accessing source repos |
 | `create-missing` | ❌ | `true` | Create project files that don't exist yet |
 | `fail-on-error` | ❌ | `false` | Fail the action if any file sync fails |
+| `hooks` | ❌ | - | YAML mapping of lifecycle hooks (see [Hooks](#hooks)) |
 
 ### Sources Configuration Format
 
@@ -180,6 +182,77 @@ sources: |
 ```
 
 When a glob pattern matches multiple files, each matched file is synced with `local_path === source_path`.
+
+### Hooks
+
+The optional `hooks` input runs your own commands at three points in a sync. Like `sources`, it is YAML:
+
+```yaml
+hooks: |
+  pre-sync: test -f .github/boilerplate.lock
+  transform:
+    package.json: jq -s '.[0] * .[1]' - .github/package.overrides.json
+    'docs/*.md': sed 's/upstream-org/our-org/g'
+  post-sync:
+    - npx prettier --write .
+    - npm test
+```
+
+| Key | Value | When it runs |
+| --- | --- | --- |
+| `pre-sync` | A command, or a list of commands | Once, after the configuration is validated and before anything is fetched |
+| `transform` | A map of local path or glob to one command | For each matching file, after the file is fetched and before it is compared with the local file |
+| `post-sync` | A command, or a list of commands | Once, after every file has been processed |
+
+Each command runs in bash from the workspace root, the way a `run:` step with `shell: bash` runs it: `bash --noprofile --norc -e -o pipefail`. On Windows the action uses Git for Windows bash, which GitHub-hosted runners include. A list runs in order and stops at the first command that fails. Quote a key that starts with `*`, as in `'*.md'`, because YAML reads a bare `*` as an alias.
+
+#### Transforms
+
+A transform rewrites a synced file before the action decides whether the file changed:
+
+1. The action fetches the file from its source.
+2. The transform command reads the fetched content on stdin and prints the content to keep on stdout.
+3. The action compares that output with the local file. If they match, the file is skipped; otherwise the action writes the output.
+
+This lets a repository keep its own changes to a synced file and still receive upstream updates. Once the transformed file is committed, later runs skip it until upstream changes.
+
+A transform:
+
+- runs on every fetch of its file, so it must be deterministic and idempotent: the same input must always give the same output;
+- can read the current local file at `$BOILERPLATE_SYNC_LOCAL_PATH`, which has not been overwritten yet; for a file that does not exist yet, `$BOILERPLATE_SYNC_FILE_EXISTS` is `false`;
+- fails when it exits non-zero or prints nothing. The file is then reported as failed and left untouched, and `fail-on-error` decides what happens next.
+
+Keys match files by local path, either exactly or as a glob matched the same way as `default_files` globs. A file can match only one key. An exact key that no source syncs is a configuration error, which catches typos.
+
+#### Hook environment variables
+
+| Variable | Set for | Value |
+| --- | --- | --- |
+| `BOILERPLATE_SYNC_HOOK` | All hooks | `pre-sync`, `transform` or `post-sync` |
+| `BOILERPLATE_SYNC_LOCAL_PATH` | `transform` | Path of the file in this repository |
+| `BOILERPLATE_SYNC_SOURCE` | `transform` | Source repository, as `owner/repo` |
+| `BOILERPLATE_SYNC_SOURCE_PATH` | `transform` | Path of the file in the source repository |
+| `BOILERPLATE_SYNC_REF` | `transform` | The configured `ref`, or empty |
+| `BOILERPLATE_SYNC_RESOLVED_REF` | `transform` | The ref the file was fetched at |
+| `BOILERPLATE_SYNC_FILE_EXISTS` | `transform` | `true` or `false` |
+| `BOILERPLATE_SYNC_HAS_CHANGES` | `post-sync` | `true` or `false`, so that `post-sync` can skip work when nothing changed |
+
+#### Hook failures
+
+- **`pre-sync` fails:** the action fails before any GitHub API call. No file is written and no output is set.
+- **A transform fails:** the file is reported as failed and left untouched (see [Transforms](#transforms)).
+- **`post-sync` fails:** the action fails, whatever `fail-on-error` is set to. The step summary and outputs are written first, so a later step with `if: always()`, or a step marked `continue-on-error`, can still use them. `post-sync` does not run when `fail-on-error` is `true` and a file failed.
+
+`has-changes` and the counts describe synced files after transforms. They do not include changes that `post-sync` makes, such as files a formatter rewrites. To detect those, run `git status --porcelain` in a later step.
+
+#### Hook security
+
+Hooks run arbitrary commands, so only the workflow that uses this action can configure them; synced content cannot. The action also:
+
+- removes every `INPUT_*` and `ACTIONS_*` variable, and `GITHUB_OUTPUT` and `GITHUB_STATE`, from each hook's environment, so hooks never see `github-token`, any `source-token` or the runner's own tokens;
+- rejects a hook command that names a file this action syncs, such as `bash scripts/merge.sh` when `scripts/merge.sh` is synced, because the source repository would then control code that runs in this step.
+
+The second check catches direct references only. A command can still run synced code indirectly: `npm test` runs scripts from a synced `package.json`, and `make` reads a synced `Makefile`. That code runs before anyone reviews the pull request. When synced files define your tests, run the tests in the pull request's CI instead of in `post-sync`. Never put a token in the step's `env:` when you use hooks, because hooks inherit it.
 
 ## Outputs
 
@@ -327,10 +400,13 @@ Only update files that already exist:
 
 ## How It Works
 
-1. **Parse Configuration** - Validates the `sources` input YAML
-2. **Fetch Source Files** - Downloads each file from its source repository using the GitHub API
-3. **Update or Create** - Updates or creates each file in the workspace
-4. **Output Results** - Sets outputs (`has-changes`, counts, summary) for use by subsequent steps
+1. **Parse Configuration** - Validates the `sources` and `hooks` inputs
+2. **Run `pre-sync`** - Runs the `pre-sync` hook, if configured
+3. **Fetch Source Files** - Downloads each file from its source repository using the GitHub API
+4. **Transform** - Runs the matching `transform` hook, if any, on each fetched file
+5. **Update or Create** - Updates or creates each file whose content differs from the workspace
+6. **Output Results** - Sets outputs (`has-changes`, counts, summary) for use by subsequent steps
+7. **Run `post-sync`** - Runs the `post-sync` hook, if configured
 
 The action writes files directly to the workspace. Use [`peter-evans/create-pull-request`](https://github.com/peter-evans/create-pull-request) or similar to create a PR from the changes.
 
@@ -359,7 +435,7 @@ Report vulnerabilities privately via [GitHub security advisories](https://github
 ## Limitations
 
 - Only supports GitHub repositories as sources (other sources are planned for future versions depending on user interest)
-- Files are replaced entirely (no partial merge support)
+- Files are replaced entirely, unless a [`transform` hook](#transforms) rewrites them
 - **No dependency analysis** - The action does not understand relationships between files or detect when syncing one file requires changes to other files
 - **No context awareness** - Project-specific customizations may be overwritten without warning
 

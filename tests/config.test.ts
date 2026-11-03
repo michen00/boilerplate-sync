@@ -8,7 +8,14 @@ import {
   getInputs,
   logConfig,
   ConfigError,
+  parseHooksInput,
+  splitShellWords,
+  findSyncedPathReferences,
+  validateHooks,
+  assignTransforms,
+  checkHookReferences,
 } from '../src/config';
+import type { HooksConfig, NormalizedFileSyncConfig } from '../src/sources/types';
 
 // Mock @actions/core so getInputs/logConfig run without a real Actions
 // runtime; mirrors the factory style in sync.test.ts.
@@ -16,6 +23,7 @@ vi.mock('@actions/core', () => ({
   getInput: vi.fn(),
   getBooleanInput: vi.fn(),
   info: vi.fn(),
+  warning: vi.fn(),
   startGroup: vi.fn(),
   endGroup: vi.fn(),
 }));
@@ -642,5 +650,403 @@ describe('logConfig', () => {
     const logged = loggedLines();
     expect(logged).toContain('org/repo@(default)');
     expect(logged).not.toContain('(custom token)');
+  });
+});
+
+const noHooks = (): HooksConfig => ({ preSync: [], transform: [], postSync: [] });
+
+describe('parseHooksInput', () => {
+  it('returns undefined for an empty or comment-only input', () => {
+    expect(parseHooksInput('')).toBeUndefined();
+    expect(parseHooksInput('   \n  ')).toBeUndefined();
+    expect(parseHooksInput('# no hooks yet')).toBeUndefined();
+    expect(parseHooksInput('{}')).toBeUndefined();
+  });
+
+  it('accepts the string form of pre-sync and post-sync', () => {
+    const hooks = parseHooksInput(`
+      pre-sync: ./scripts/check.sh
+      post-sync: npx prettier --write .
+    `);
+
+    expect(hooks).toEqual({
+      preSync: ['./scripts/check.sh'],
+      transform: [],
+      postSync: ['npx prettier --write .'],
+    });
+  });
+
+  it('accepts the list form of pre-sync and post-sync, in order', () => {
+    const hooks = parseHooksInput(`
+      pre-sync:
+        - test -f a
+        - test -f b
+      post-sync:
+        - npx prettier --write .
+        - npm test
+    `);
+
+    expect(hooks?.preSync).toEqual(['test -f a', 'test -f b']);
+    expect(hooks?.postSync).toEqual(['npx prettier --write .', 'npm test']);
+  });
+
+  it('parses the transform map and normalises its keys', () => {
+    const hooks = parseHooksInput(`
+      transform:
+        ./package.json: jq -s '.[0] * .[1]' - overrides.json
+        docs/**/*.md: sed 's/a/b/'
+    `);
+
+    expect(hooks?.transform).toEqual([
+      { pattern: 'package.json', command: "jq -s '.[0] * .[1]' - overrides.json" },
+      { pattern: 'docs/**/*.md', command: "sed 's/a/b/'" },
+    ]);
+  });
+
+  it('rejects an unknown key such as post-file-sync, naming the allowed keys', () => {
+    const parse = () => parseHooksInput('post-file-sync:\n  package.json: ./merge.sh');
+
+    expect(parse).toThrow(ConfigError);
+    expect(parse).toThrow(/'post-file-sync'.*pre-sync, transform, post-sync/);
+  });
+
+  it('rejects invalid YAML', () => {
+    expect(() => parseHooksInput('pre-sync: [unclosed')).toThrow(ConfigError);
+  });
+
+  it('rejects a hooks input that is not a mapping', () => {
+    expect(() => parseHooksInput('- npm test')).toThrow(/must be a YAML mapping/);
+  });
+
+  it('rejects a post-sync mapping', () => {
+    expect(() => parseHooksInput('post-sync:\n  run: npm test')).toThrow(
+      /hooks\.post-sync/
+    );
+  });
+
+  it('rejects empty commands and empty lists', () => {
+    expect(() => parseHooksInput("pre-sync: ''")).toThrow(/hooks\.pre-sync/);
+    expect(() => parseHooksInput('pre-sync: []')).toThrow(/hooks\.pre-sync/);
+    expect(() => parseHooksInput('post-sync:\n  - npm test\n  - ""')).toThrow(
+      /hooks\.post-sync\[1\]/
+    );
+    expect(() => parseHooksInput('pre-sync:')).toThrow(/hooks\.pre-sync/);
+  });
+
+  it('rejects a transform that is not a non-empty mapping', () => {
+    expect(() => parseHooksInput('transform: ./merge.sh')).toThrow(/hooks\.transform/);
+    expect(() => parseHooksInput('transform: {}')).toThrow(/hooks\.transform/);
+  });
+
+  it('rejects a transform key mapped to a list', () => {
+    expect(() =>
+      parseHooksInput('transform:\n  package.json:\n    - ./a.sh\n    - ./b.sh')
+    ).toThrow(/hooks\.transform\['package\.json'\]/);
+  });
+
+  it('rejects transform keys that collide after normalisation', () => {
+    expect(() =>
+      parseHooksInput('transform:\n  ./a.json: cat\n  a.json: cat')
+    ).toThrow(/duplicate key 'a\.json'/);
+  });
+});
+
+describe('splitShellWords', () => {
+  it('splits on whitespace', () => {
+    expect(splitShellWords('npx  prettier\t--write .')).toEqual([
+      'npx',
+      'prettier',
+      '--write',
+      '.',
+    ]);
+  });
+
+  it('honours single quotes, double quotes and backslash escapes', () => {
+    expect(splitShellWords(`bash 'a b.sh' "c d" e\\ f`)).toEqual([
+      'bash',
+      'a b.sh',
+      'c d',
+      'e f',
+    ]);
+    expect(splitShellWords(`echo "x\\"y" 'it''s'`)).toEqual(['echo', 'x"y', 'its']);
+    expect(splitShellWords(`pre'fix'"ed"`)).toEqual(['prefixed']);
+  });
+
+  it('treats shell operators as separators', () => {
+    expect(splitShellWords('a;b|c&&d>e<f (g)')).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+      'g',
+    ]);
+  });
+
+  it('joins a backslash-newline continuation', () => {
+    expect(splitShellWords('npm \\\n  test')).toEqual(['npm', 'test']);
+  });
+});
+
+describe('findSyncedPathReferences', () => {
+  it('finds a synced path named directly or through ./', () => {
+    const synced = new Set(['scripts/merge.sh']);
+
+    expect(findSyncedPathReferences('scripts/merge.sh', synced)).toEqual([
+      'scripts/merge.sh',
+    ]);
+    expect(findSyncedPathReferences('bash ./scripts/merge.sh', synced)).toEqual([
+      'scripts/merge.sh',
+    ]);
+    expect(findSyncedPathReferences('cat scripts//merge.sh | sh', synced)).toEqual([
+      'scripts/merge.sh',
+    ]);
+  });
+
+  it('finds the value of an option or assignment', () => {
+    const synced = new Set(['scripts/x.js']);
+
+    expect(
+      findSyncedPathReferences('node --require=./scripts/x.js main.js', synced)
+    ).toEqual(['scripts/x.js']);
+    expect(findSyncedPathReferences('FILE=scripts/x.js make', synced)).toEqual([
+      'scripts/x.js',
+    ]);
+  });
+
+  it('ignores options without a value and unrelated words', () => {
+    const synced = new Set(['prettier.config.js', '--write']);
+
+    expect(findSyncedPathReferences('npx prettier --write .', synced)).toEqual([]);
+  });
+
+  it('reports each path once', () => {
+    const synced = new Set(['a.sh']);
+
+    expect(findSyncedPathReferences('./a.sh && bash a.sh', synced)).toEqual(['a.sh']);
+  });
+});
+
+describe('validateHooks', () => {
+  const sources = parseSourcesInput(`
+    - source: org/repo
+      default_files:
+        - package.json
+        - docs/**/*.md
+      file_pairs:
+        - local_path: ./scripts/merge.sh
+          source_path: templates/merge.sh
+  `);
+
+  it('accepts hooks that name no synced path', () => {
+    const hooks: HooksConfig = {
+      preSync: ['test -f .github/lock'],
+      transform: [
+        { pattern: 'package.json', command: "jq -s '.[0] * .[1]' - overrides.json" },
+      ],
+      postSync: ['npx prettier --write .'],
+    };
+
+    expect(() => validateHooks(hooks, sources)).not.toThrow();
+  });
+
+  it('accepts a literal transform key matched by a default_files glob', () => {
+    const hooks = noHooks();
+    hooks.transform.push({ pattern: 'docs/guide/a.md', command: 'cat' });
+
+    expect(() => validateHooks(hooks, sources)).not.toThrow();
+  });
+
+  it('accepts a literal transform key equal to a file_pairs local path written with ./', () => {
+    const hooks = noHooks();
+    hooks.transform.push({ pattern: 'scripts/merge.sh', command: 'cat' });
+
+    expect(() => validateHooks(hooks, sources)).not.toThrow();
+  });
+
+  it('accepts a glob transform key without checking it against the sources', () => {
+    const hooks = noHooks();
+    hooks.transform.push({ pattern: 'nothing/**/*.yml', command: 'cat' });
+
+    expect(() => validateHooks(hooks, sources)).not.toThrow();
+  });
+
+  it('rejects a literal transform key that is never synced', () => {
+    const hooks = noHooks();
+    hooks.transform.push({ pattern: 'tsconfig.json', command: 'cat' });
+
+    expect(() => validateHooks(hooks, sources)).toThrow(ConfigError);
+    expect(() => validateHooks(hooks, sources)).toThrow(/'tsconfig\.json'/);
+  });
+
+  it('rejects a hook command that names a file_pairs local path', () => {
+    const hooks = noHooks();
+    hooks.transform.push({ pattern: 'package.json', command: 'bash scripts/merge.sh' });
+
+    expect(() => validateHooks(hooks, sources)).toThrow(
+      /hooks\.transform.*'scripts\/merge\.sh'/
+    );
+  });
+
+  it('rejects a pre-sync command that names a literal default_files path', () => {
+    const hooks = noHooks();
+    hooks.preSync.push('node ./package.json');
+
+    expect(() => validateHooks(hooks, sources)).toThrow(/hooks\.pre-sync.*'package\.json'/);
+  });
+
+  it('leaves paths under a default_files glob to the check after expansion', () => {
+    const hooks = noHooks();
+    hooks.postSync.push('./docs/build.md');
+
+    expect(() => validateHooks(hooks, sources)).not.toThrow();
+  });
+});
+
+describe('assignTransforms', () => {
+  const config = (local_path: string): NormalizedFileSyncConfig => ({
+    local_path,
+    source_path: local_path,
+    source: 'org/repo',
+    origin: 'default_files',
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('assigns exact and glob keys to the files they match', () => {
+    const exact = { pattern: 'package.json', command: 'jq .' };
+    const glob = { pattern: 'docs/**/*.md', command: 'cat' };
+
+    const assigned = assignTransforms(
+      [config('package.json'), config('docs/a.md'), config('docs/guide/b.md'), config('README.md')],
+      [exact, glob]
+    );
+
+    expect(assigned).toEqual([exact, glob, glob, undefined]);
+  });
+
+  it('matches a local path written with ./', () => {
+    const rule = { pattern: 'package.json', command: 'jq .' };
+
+    expect(assignTransforms([config('./package.json')], [rule])).toEqual([rule]);
+  });
+
+  it('rejects a file matched by more than one key', () => {
+    const assign = () =>
+      assignTransforms(
+        [config('docs/a.md')],
+        [
+          { pattern: 'docs/*.md', command: 'cat' },
+          { pattern: 'docs/a.md', command: 'cat' },
+        ]
+      );
+
+    expect(assign).toThrow(ConfigError);
+    expect(assign).toThrow(/'docs\/a\.md'.*'docs\/\*\.md', 'docs\/a\.md'/);
+  });
+
+  it('warns about a glob key that matches no file', () => {
+    assignTransforms([config('README.md')], [{ pattern: 'docs/**', command: 'cat' }]);
+
+    expect(core.warning).toHaveBeenCalledWith(expect.stringContaining("'docs/**'"));
+  });
+
+  it('assigns nothing to a glob that failed to expand', () => {
+    const unexpanded = config('docs/**');
+
+    expect(
+      assignTransforms([unexpanded], [{ pattern: 'docs/**', command: 'cat' }])
+    ).toEqual([undefined]);
+  });
+});
+
+describe('checkHookReferences', () => {
+  it('rejects a hook command that names an expanded local path', () => {
+    const hooks = noHooks();
+    hooks.postSync.push('./scripts/fmt.sh');
+
+    expect(() => checkHookReferences(hooks, ['scripts/fmt.sh', 'README.md'])).toThrow(
+      /hooks\.post-sync.*'scripts\/fmt\.sh'/
+    );
+  });
+
+  it('accepts hooks that name no expanded local path', () => {
+    const hooks = noHooks();
+    hooks.postSync.push('npx prettier --write .');
+
+    expect(() => checkHookReferences(hooks, ['scripts/fmt.sh'])).not.toThrow();
+  });
+});
+
+describe('getInputs with hooks', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  const mockInputs = (hooksYaml: string) => {
+    vi.mocked(core.getInput).mockImplementation((name: string) => {
+      if (name === 'sources') {
+        return `
+          - source: org/repo
+            default_files:
+              - package.json
+              - scripts/merge.sh
+        `;
+      }
+      if (name === 'github-token') return 'ghp_token';
+      if (name === 'hooks') return hooksYaml;
+      return '';
+    });
+    vi.mocked(core.getBooleanInput).mockReturnValue(false);
+  };
+
+  it('leaves hooks undefined when the input is empty', () => {
+    mockInputs('');
+
+    expect(getInputs().hooks).toBeUndefined();
+  });
+
+  it('parses and validates the hooks input', () => {
+    mockInputs('transform:\n  package.json: jq .');
+
+    expect(getInputs().hooks).toEqual({
+      preSync: [],
+      transform: [{ pattern: 'package.json', command: 'jq .' }],
+      postSync: [],
+    });
+  });
+
+  it('rejects hooks that name a synced path', () => {
+    mockInputs('post-sync: bash scripts/merge.sh');
+
+    expect(() => getInputs()).toThrow(ConfigError);
+  });
+});
+
+describe('logConfig with hooks', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('logs hook commands', () => {
+    logConfig({
+      sources: [{ source: 'org/repo', default_files: ['package.json'] }],
+      githubToken: 'ghp_token',
+      createMissing: true,
+      failOnError: false,
+      hooks: {
+        preSync: ['test -f lock'],
+        transform: [{ pattern: 'package.json', command: 'jq .' }],
+        postSync: ['npm test'],
+      },
+    });
+
+    const logged = vi.mocked(core.info).mock.calls.map((call) => String(call[0])).join('\n');
+    expect(logged).toContain('pre-sync: test -f lock');
+    expect(logged).toContain('transform package.json: jq .');
+    expect(logged).toContain('post-sync: npm test');
   });
 });

@@ -6,12 +6,19 @@ import {
   isGlobPattern,
   listFilesMatchingGlob,
 } from './sources/github';
-import { ConfigError, normalizeSources } from './config';
+import {
+  assignTransforms,
+  checkHookReferences,
+  ConfigError,
+  normalizeSources,
+} from './config';
+import { runHookCommands, runTransform } from './hooks';
 import type {
   NormalizedFileSyncConfig,
   SyncResult,
   SyncSummary,
   ActionInputs,
+  TransformRule,
 } from './sources/types';
 
 /**
@@ -50,12 +57,14 @@ async function writeFile(filePath: string, content: string): Promise<void> {
 }
 
 /**
- * Sync a single file from source to project
+ * Sync a single file from source to project. When a transform rule applies,
+ * its output replaces the fetched content before the unchanged check.
  */
 async function syncFile(
   config: NormalizedFileSyncConfig,
   fallbackToken: string,
-  createMissing: boolean
+  createMissing: boolean,
+  transform?: TransformRule
 ): Promise<SyncResult> {
   const { local_path, source_path, source, ref, sourceToken } = config;
 
@@ -82,10 +91,34 @@ async function syncFile(
     core.info(`  Fetching from ${gitSource.toString()}`);
 
     const fetchResult = await gitSource.fetch(token);
-    const newContent = fetchResult.content;
+    let newContent = fetchResult.content;
 
     // Compare with existing content
     const existingContent = exists ? await readFile(local_path) : null;
+
+    if (transform) {
+      core.info(`  Transforming with hooks.transform['${transform.pattern}']`);
+      const transformed = await runTransform(transform, fetchResult.content, {
+        BOILERPLATE_SYNC_LOCAL_PATH: local_path,
+        BOILERPLATE_SYNC_SOURCE: source,
+        BOILERPLATE_SYNC_SOURCE_PATH: source_path,
+        BOILERPLATE_SYNC_REF: ref ?? '',
+        BOILERPLATE_SYNC_RESOLVED_REF: fetchResult.resolvedRef,
+        BOILERPLATE_SYNC_FILE_EXISTS: String(existingContent !== null),
+      });
+
+      if (!transformed.ok) {
+        // Nothing has been written yet, so the local file is untouched
+        core.warning(`  Failed: ${transformed.error}`);
+        return {
+          config,
+          status: 'failed',
+          error: transformed.error,
+          resolvedRef: fetchResult.resolvedRef,
+        };
+      }
+      newContent = transformed.content;
+    }
 
     if (existingContent !== null && existingContent === newContent) {
       core.info(`  Skipped: no changes`);
@@ -196,7 +229,12 @@ async function expandGlobPatterns(
  * Sync all files and return summary
  */
 export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
-  const { sources, githubToken, createMissing, failOnError } = inputs;
+  const { sources, githubToken, createMissing, failOnError, hooks } = inputs;
+
+  // pre-sync runs before glob expansion, which already calls the GitHub API
+  if (hooks && hooks.preSync.length > 0) {
+    await runHookCommands('pre-sync', hooks.preSync, {});
+  }
 
   // Normalize sources into flat file configs
   const normalizedConfigs = normalizeSources(sources);
@@ -204,11 +242,23 @@ export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
   // Expand any glob patterns
   const expandedConfigs = await expandGlobPatterns(normalizedConfigs, githubToken);
 
+  // Hook checks that need the expanded file list, before any content is fetched
+  let transforms: Array<TransformRule | undefined> = [];
+  if (hooks) {
+    checkHookReferences(
+      hooks,
+      expandedConfigs
+        .filter((config) => !isGlobPattern(config.local_path))
+        .map((config) => config.local_path)
+    );
+    transforms = assignTransforms(expandedConfigs, hooks.transform);
+  }
+
   const results: SyncResult[] = [];
 
-  for (const config of expandedConfigs) {
+  for (const [index, config] of expandedConfigs.entries()) {
     // githubToken is used as fallback when no per-source token is specified
-    const result = await syncFile(config, githubToken, createMissing);
+    const result = await syncFile(config, githubToken, createMissing, transforms[index]);
     results.push(result);
 
     // If failOnError is true and this file failed, stop processing
@@ -247,4 +297,29 @@ export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
   core.info(`  Total: ${results.length}`);
 
   return summary;
+}
+
+/**
+ * Run the post-sync hook, if configured. It is skipped when fail-on-error
+ * is true and any file failed, because the sync then stopped early and the
+ * action fails anyway. Returns whether it ran; throws HookError on failure.
+ */
+export async function runPostSync(
+  inputs: ActionInputs,
+  summary: SyncSummary
+): Promise<boolean> {
+  const commands = inputs.hooks?.postSync ?? [];
+  if (commands.length === 0) {
+    return false;
+  }
+
+  if (inputs.failOnError && summary.failed.length > 0) {
+    core.info('Skipping post-sync: fail-on-error stopped the sync');
+    return false;
+  }
+
+  await runHookCommands('post-sync', commands, {
+    BOILERPLATE_SYNC_HAS_CHANGES: String(summary.hasChanges),
+  });
+  return true;
 }

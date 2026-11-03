@@ -142,6 +142,28 @@ export interface SyncSummary {
 }
 
 /**
+ * A `transform` entry from the `hooks` input
+ */
+export interface TransformRule {
+  /** Local path or glob that selects files (normalised, no leading `./`) */
+  pattern: string;
+  /** Bash command that reads fetched content on stdin and prints the content to keep */
+  command: string;
+}
+
+/**
+ * Parsed `hooks` input
+ */
+export interface HooksConfig {
+  /** Commands run once before anything is fetched */
+  preSync: string[];
+  /** Per-file content transforms, applied before the unchanged check */
+  transform: TransformRule[];
+  /** Commands run once after every file has been processed */
+  postSync: string[];
+}
+
+/**
  * Parsed action inputs
  */
 export interface ActionInputs {
@@ -149,6 +171,8 @@ export interface ActionInputs {
   githubToken: string;
   createMissing: boolean;
   failOnError: boolean;
+  /** Lifecycle hooks; undefined when the `hooks` input is empty */
+  hooks?: HooksConfig;
 }
 
 /**
