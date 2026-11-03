@@ -33695,8 +33695,11 @@ function spawnBash(bash, script, env, input, onStdoutLine, onStderrLine) {
     const stdoutLines = onStdoutLine ? lineReader(onStdoutLine) : void 0;
     const stderrLines = lineReader(onStderrLine);
     child.stdout?.on("data", (chunk) => {
-      stdoutChunks.push(chunk);
-      stdoutLines?.write(chunk);
+      if (stdoutLines) {
+        stdoutLines.write(chunk);
+      } else {
+        stdoutChunks.push(chunk);
+      }
     });
     child.stderr?.on("data", (chunk) => stderrLines.write(chunk));
     child.on("error", reject);

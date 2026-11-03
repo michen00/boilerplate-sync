@@ -158,7 +158,8 @@ function lineReader(onLine: (line: string) => void): {
  * Spawn bash on a script and wait for it to close. With `input`, stdin is a
  * pipe that receives it, and a process that exits without reading all of
  * it is not an error. Without `input`, stdin is the null device, so a
- * command that reads stdin sees end-of-file at once.
+ * command that reads stdin sees end-of-file at once. stdout goes line by
+ * line to `onStdoutLine` when given, and is otherwise captured and returned.
  */
 function spawnBash(
   bash: string,
@@ -180,9 +181,14 @@ function spawnBash(
     const stdoutLines = onStdoutLine ? lineReader(onStdoutLine) : undefined;
     const stderrLines = lineReader(onStderrLine);
 
+    // Stream stdout to the log, or capture it as a transform's output;
+    // never both, so a noisy pre-sync or post-sync is not held in memory
     child.stdout?.on('data', (chunk: Buffer) => {
-      stdoutChunks.push(chunk);
-      stdoutLines?.write(chunk);
+      if (stdoutLines) {
+        stdoutLines.write(chunk);
+      } else {
+        stdoutChunks.push(chunk);
+      }
     });
     child.stderr?.on('data', (chunk: Buffer) => stderrLines.write(chunk));
 
@@ -210,7 +216,8 @@ function spawnBash(
  * Run one command the way an Actions `run:` step with `shell: bash` does:
  * write it to a temporary script and run `bash --noprofile --norc -e -o
  * pipefail <script>` from the working directory. stderr is logged line by
- * line; stdout is logged only when `logStdout` is set.
+ * line. stdout is logged line by line when `logStdout` is set, and is
+ * otherwise captured and returned, never both.
  */
 async function runBash(
   hook: HookName,
