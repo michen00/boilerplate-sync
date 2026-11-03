@@ -242,11 +242,22 @@ export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
   // copy of such a file in the workspace for pre-sync to run.
   let transforms: Array<TransformRule | undefined> = [];
   if (hooks) {
+    // A glob that failed to expand, or matched nothing, hides which files it
+    // syncs, and copies from an earlier sync may still be in the workspace.
+    // Fail closed rather than run hooks that cannot be checked against them.
+    const unexpanded = expandedConfigs
+      .filter((config) => isGlobPattern(config.local_path))
+      .map((config) => `'${config.local_path}'`);
+    if (unexpanded.length > 0) {
+      throw new ConfigError(
+        `hooks: ${unexpanded.join(', ')} did not expand to any file, so hook ` +
+          'commands cannot be checked against the paths it syncs; no hook was run'
+      );
+    }
+
     checkHookReferences(
       hooks,
-      expandedConfigs
-        .filter((config) => !isGlobPattern(config.local_path))
-        .map((config) => config.local_path)
+      expandedConfigs.map((config) => config.local_path)
     );
     transforms = assignTransforms(expandedConfigs, hooks.transform);
 

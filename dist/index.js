@@ -33928,9 +33928,15 @@ async function syncFiles(inputs) {
   const expandedConfigs = await expandGlobPatterns(normalizedConfigs, githubToken);
   let transforms = [];
   if (hooks) {
+    const unexpanded = expandedConfigs.filter((config) => isGlobPattern(config.local_path)).map((config) => `'${config.local_path}'`);
+    if (unexpanded.length > 0) {
+      throw new ConfigError(
+        `hooks: ${unexpanded.join(", ")} did not expand to any file, so hook commands cannot be checked against the paths it syncs; no hook was run`
+      );
+    }
     checkHookReferences(
       hooks,
-      expandedConfigs.filter((config) => !isGlobPattern(config.local_path)).map((config) => config.local_path)
+      expandedConfigs.map((config) => config.local_path)
     );
     transforms = assignTransforms(expandedConfigs, hooks.transform);
     if (hooks.preSync.length > 0) {

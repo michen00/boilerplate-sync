@@ -705,6 +705,28 @@ describe('syncFiles hook checks after glob expansion', () => {
     expect(createGitHubSource).not.toHaveBeenCalled();
   });
 
+  it('fails closed, running no hook, when a glob fails to expand', async () => {
+    vi.mocked(listFilesMatchingGlob).mockRejectedValue(new Error('tree API unavailable'));
+
+    const sync = syncFiles(globInputs(withHooks({ preSync: ['bash scripts/fmt.sh'] })));
+
+    await expect(sync).rejects.toThrow(ConfigError);
+    await expect(sync).rejects.toThrow(/'scripts\/\*\*'.*did not expand/);
+    expect(runHookCommands).not.toHaveBeenCalled();
+    expect(createGitHubSource).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a glob matches no file', async () => {
+    vi.mocked(listFilesMatchingGlob).mockImplementation(async (_o, _r, pattern) =>
+      pattern === 'scripts/**' ? [] : ['docs/a.md']
+    );
+
+    await expect(
+      syncFiles(globInputs(withHooks({ postSync: ['npm test'] })))
+    ).rejects.toThrow(/'scripts\/\*\*'.*did not expand/);
+    expect(createGitHubSource).not.toHaveBeenCalled();
+  });
+
   it('rejects a hook whose unquoted glob would expand to a synced path', async () => {
     const sync = syncFiles(globInputs(withHooks({ postSync: ['bash scripts/*.sh'] })));
 
