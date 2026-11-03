@@ -42,7 +42,7 @@ outputs:
   skipped-count:
     description: Number of files skipped (unchanged, or missing when create-missing is disabled)
   summary:
-    description: JSON summary of all sync operations
+    description: JSON summary of all sync operations (never includes tokens)
 
 runs:
   using: node24

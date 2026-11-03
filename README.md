@@ -189,7 +189,7 @@ When a glob pattern matches multiple files, each matched file is synced with `lo
 | `updated-count` | `string` | Number of files updated or created. Always set. |
 | `failed-count` | `string` | Number of files that failed to sync. Always set. |
 | `skipped-count` | `string` | Number of files skipped (unchanged, or missing when create-missing is disabled). Always set. |
-| `summary` | `JSON` | Full sync summary with details on each file. Always set. |
+| `summary` | `JSON` | Full sync summary with details on each file. Never includes `github-token` or any `source-token`. Always set. |
 
 ## Examples
 
