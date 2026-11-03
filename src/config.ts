@@ -313,7 +313,9 @@ function parseTransformRules(value: unknown): TransformRule[] {
       );
     }
 
-    const pattern = normalizeGlobPattern(key);
+    // An exact key names a local path, where a backslash is a Windows
+    // separator; in a glob key a backslash escapes the next character
+    const pattern = isGlobPattern(key) ? normalizeGlobPattern(key) : normalizeLocalPath(key);
     if (seen.has(pattern)) {
       throw new ConfigError(
         `hooks.transform: duplicate key '${pattern}' after removing './'`

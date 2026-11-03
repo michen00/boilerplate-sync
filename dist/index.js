@@ -33284,7 +33284,7 @@ function parseTransformRules(value) {
         `hooks.transform['${key}']: must be a non-empty command string`
       );
     }
-    const pattern = normalizeGlobPattern(key);
+    const pattern = isGlobPattern(key) ? normalizeGlobPattern(key) : normalizeLocalPath(key);
     if (seen.has(pattern)) {
       throw new ConfigError(
         `hooks.transform: duplicate key '${pattern}' after removing './'`

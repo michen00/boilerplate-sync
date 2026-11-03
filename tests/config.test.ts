@@ -1240,3 +1240,28 @@ describe('case-insensitive synced-path matching', () => {
     );
   });
 });
+
+describe('transform key normalisation', () => {
+  it('normalises an exact key like a local path', () => {
+    expect(parseHooksInput('transform:\n  scripts\\merge.sh: cat')?.transform).toEqual([
+      { pattern: 'scripts/merge.sh', command: 'cat' },
+    ]);
+  });
+
+  it('keeps backslash escapes in a glob key', () => {
+    expect(parseHooksInput("transform:\n  'docs/*\\[1\\].md': cat")?.transform).toEqual([
+      { pattern: 'docs/*\\[1\\].md', command: 'cat' },
+    ]);
+  });
+
+  it('accepts an exact Windows-style key for a synced path', () => {
+    const sources = parseSourcesInput(`
+      - source: org/repo
+        file_pairs:
+          - local_path: scripts/merge.sh
+    `);
+    const hooks = parseHooksInput('transform:\n  scripts\\merge.sh: cat') as HooksConfig;
+
+    expect(() => validateHooks(hooks, sources)).not.toThrow();
+  });
+});
