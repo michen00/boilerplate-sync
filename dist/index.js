@@ -33344,6 +33344,15 @@ var SHELL_GLOB_OPTIONS = {
 var SHELL_GLOB_MATCH_OPTIONS = { ...SHELL_GLOB_OPTIONS, nocase: true };
 var SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "dash", "zsh", "ksh", "ash"]);
 var SHELL_COMMAND_OPTION = /^-[A-Za-z]*c[A-Za-z]*$/;
+var MAX_NESTING = 32;
+function isShell(word) {
+  const name = path2.posix.basename(word.replace(/\\/g, "/")).toLowerCase();
+  return SHELLS.has(name.replace(/\.exe$/, ""));
+}
+function lineEnd(command, start) {
+  const newline = command.indexOf("\n", start);
+  return newline < 0 ? command.length : newline;
+}
 function closingParen(command, start) {
   let depth = 1;
   let quote = null;
@@ -33355,8 +33364,15 @@ function closingParen(command, start) {
       i++;
     } else if (quote === '"') {
       if (ch === '"') quote = null;
+    } else if (quote === "$'") {
+      if (ch === "'") quote = null;
+    } else if (ch === "$" && command[i + 1] === "'") {
+      quote = "$'";
+      i++;
     } else if (ch === "'" || ch === '"') {
       quote = ch;
+    } else if (ch === "#" && (i === start || /[\s;&|()]/.test(command[i - 1]))) {
+      i = lineEnd(command, i) - 1;
     } else if (ch === "(") {
       depth++;
     } else if (ch === ")" && --depth === 0) {
@@ -33372,13 +33388,53 @@ function closingBacktick(command, start) {
   }
   return command.length;
 }
-function splitShellTokens(command, substitutions) {
+function readHeredocDelimiter(command, start, heredocs) {
+  let i = start;
+  const stripTabs = command[i] === "-";
+  if (stripTabs) i++;
+  while (command[i] === " " || command[i] === "	") i++;
+  let delimiter = "";
+  while (i < command.length && !/[\s;&|()<>]/.test(command[i])) {
+    const ch = command[i];
+    if (ch === "'" || ch === '"') {
+      const close = command.indexOf(ch, i + 1);
+      const end = close < 0 ? command.length : close;
+      delimiter += command.slice(i + 1, end);
+      i = end + 1;
+    } else if (ch === "\\") {
+      delimiter += command[i + 1] ?? "";
+      i += 2;
+    } else {
+      delimiter += ch;
+      i++;
+    }
+  }
+  if (delimiter !== "") heredocs.push({ delimiter, stripTabs });
+  return i;
+}
+function readHeredocBodies(command, start, heredocs, nested) {
+  let i = start;
+  for (const { delimiter, stripTabs } of heredocs) {
+    const body = [];
+    while (i < command.length) {
+      const end = lineEnd(command, i);
+      const line = command.slice(i, end);
+      i = end + 1;
+      if ((stripTabs ? line.replace(/^\t+/, "") : line) === delimiter) break;
+      body.push(line);
+    }
+    nested.push(body.join("\n"));
+  }
+  return i;
+}
+function splitShellTokens(command, nested) {
   const words = [];
   let text = "";
   let pattern = "";
   let inWord = false;
   let atCommandStart = true;
   let quote = null;
+  const heredocs = [];
   const literal2 = (ch) => {
     text += ch;
     pattern += GLOB_CHARS.has(ch) ? `\\${ch}` : ch;
@@ -33400,16 +33456,27 @@ function splitShellTokens(command, substitutions) {
       else literal2(ch);
       continue;
     }
+    if (quote === "$'") {
+      if (ch === "'") {
+        quote = null;
+      } else if (ch === "\\" && next !== void 0) {
+        literal2(next);
+        i++;
+      } else {
+        literal2(ch);
+      }
+      continue;
+    }
     if (ch === "$" && next === "(") {
       const end = closingParen(command, i + 2);
-      substitutions.push(command.slice(i + 2, end));
+      nested.push(command.slice(i + 2, end));
       inWord = true;
       i = end;
       continue;
     }
     if (ch === "`") {
       const end = closingBacktick(command, i + 1);
-      substitutions.push(command.slice(i + 1, end));
+      nested.push(command.slice(i + 1, end));
       inWord = true;
       i = end;
       continue;
@@ -33417,6 +33484,8 @@ function splitShellTokens(command, substitutions) {
     if (quote === '"') {
       if (ch === '"') {
         quote = null;
+      } else if (ch === "\\" && next === "\n") {
+        i++;
       } else if (ch === "\\" && next !== void 0 && '"\\$`'.includes(next)) {
         literal2(next);
         i++;
@@ -33425,9 +33494,24 @@ function splitShellTokens(command, substitutions) {
       }
       continue;
     }
-    if (ch === "'" || ch === '"') {
+    if (ch === "$" && (next === "'" || next === '"')) {
+      quote = next === "'" ? "$'" : '"';
+      inWord = true;
+      i++;
+    } else if (ch === "'" || ch === '"') {
       quote = ch;
       inWord = true;
+    } else if (ch === "#" && !inWord) {
+      const end = lineEnd(command, i);
+      nested.push(command.slice(i + 1, end));
+      i = end - 1;
+    } else if (ch === "<" && next === "<") {
+      endWord();
+      if (command[i + 2] === "<") {
+        i += 2;
+      } else {
+        i = readHeredocDelimiter(command, i + 2, heredocs) - 1;
+      }
     } else if (ch === "\\") {
       if (next === "\n") {
         i++;
@@ -33444,6 +33528,9 @@ function splitShellTokens(command, substitutions) {
     } else if (ch === "\n" || SHELL_SEPARATORS.has(ch)) {
       endWord();
       atCommandStart = true;
+      if (ch === "\n" && heredocs.length > 0) {
+        i = readHeredocBodies(command, i + 1, heredocs.splice(0), nested) - 1;
+      }
     } else if (/\s/.test(ch)) {
       endWord();
     } else {
@@ -33466,41 +33553,51 @@ function pathCandidates(word) {
 function nestedCommands(words) {
   const nested = [];
   let inShell = false;
+  let afterCommandOption = false;
   let evalArgs;
   const endCommand = () => {
     if (evalArgs !== void 0 && evalArgs.length > 0) {
       nested.push(evalArgs.join(" "));
     }
     inShell = false;
+    afterCommandOption = false;
     evalArgs = void 0;
   };
-  words.forEach((word, index) => {
+  for (const word of words) {
     if (word.startsCommand) {
       endCommand();
     }
     if (evalArgs !== void 0) {
       evalArgs.push(word.text);
+    } else if (afterCommandOption) {
+      nested.push(word.text);
     } else if (word.text === "eval") {
       evalArgs = [];
-    } else if (SHELLS.has(path2.posix.basename(word.text))) {
+    } else if (isShell(word.text)) {
       inShell = true;
     } else if (inShell && SHELL_COMMAND_OPTION.test(word.text)) {
-      const argument = words[index + 1];
-      if (argument !== void 0 && !argument.startsCommand) {
-        nested.push(argument.text);
-      }
+      afterCommandOption = true;
     }
-  });
+  }
   endCommand();
   return nested;
 }
 function findSyncedPathReferences(command, synced) {
-  const found = /* @__PURE__ */ new Set();
-  const substitutions = [];
-  const words = splitShellTokens(command, substitutions);
   const syncedByLowerCase = new Map(
     Array.from(synced, (syncedPath) => [syncedPath.toLowerCase(), syncedPath])
   );
+  const found = /* @__PURE__ */ new Set();
+  collectSyncedPathReferences(command, synced, syncedByLowerCase, 0, found);
+  return [...found];
+}
+function collectSyncedPathReferences(command, synced, syncedByLowerCase, depth, found) {
+  if (depth > MAX_NESTING) {
+    throw new ConfigError(
+      `nests command substitutions, shell strings or evals more than ${MAX_NESTING} levels deep`
+    );
+  }
+  const nested = [];
+  const words = splitShellTokens(command, nested);
   for (const word of words) {
     const texts = pathCandidates(word.text);
     const patterns = pathCandidates(word.pattern);
@@ -33513,20 +33610,24 @@ function findSyncedPathReferences(command, synced) {
       }
       const pattern = normalizeGlobPattern(patterns[index]);
       if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
+        const matcher = new Minimatch(pattern, SHELL_GLOB_MATCH_OPTIONS);
         for (const syncedPath of synced) {
-          if (minimatch(syncedPath, pattern, SHELL_GLOB_MATCH_OPTIONS)) {
+          if (matcher.match(syncedPath)) {
             found.add(syncedPath);
           }
         }
       }
     });
   }
-  for (const nested of [...nestedCommands(words), ...substitutions]) {
-    for (const syncedPath of findSyncedPathReferences(nested, synced)) {
-      found.add(syncedPath);
+  for (const inner of [...nestedCommands(words), ...nested]) {
+    collectSyncedPathReferences(inner, synced, syncedByLowerCase, depth + 1, found);
+  }
+  const lines = command.split("\n");
+  if (lines.length > 1) {
+    for (const line of lines) {
+      collectSyncedPathReferences(line, synced, syncedByLowerCase, depth, found);
     }
   }
-  return [...found];
 }
 function labelledHookCommands(hooks) {
   return [
@@ -33546,7 +33647,15 @@ function checkHookReferences(hooks, localPaths) {
     ])
   );
   for (const { label, command } of labelledHookCommands(hooks)) {
-    const [first] = findSyncedPathReferences(command, synced);
+    let first;
+    try {
+      [first] = findSyncedPathReferences(command, synced);
+    } catch (error2) {
+      if (error2 instanceof ConfigError) {
+        throw new ConfigError(`${label}: command '${command}' ${error2.message}`);
+      }
+      throw error2;
+    }
     if (first !== void 0) {
       throw new ConfigError(
         `${label}: command '${command}' names synced path '${first}'; a hook must not run a file that a source repository controls`

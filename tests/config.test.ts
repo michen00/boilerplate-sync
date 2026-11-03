@@ -1283,3 +1283,121 @@ describe('redirections do not start a new command', () => {
     expect(splitShellWords('a 2>&1 b')).toEqual(['a', '2', '1', 'b']);
   });
 });
+
+describe('a quote in a comment or here-document does not hide later lines', () => {
+  const synced = new Set(['scripts/merge.sh']);
+  const find = (command: string) => findSyncedPathReferences(command, synced);
+
+  it('checks the lines after a comment with an apostrophe or a lone double quote', () => {
+    expect(find("# Don't run this on forks\nbash scripts/merge.sh")).toEqual(['scripts/merge.sh']);
+    expect(find("echo hi # it's fine\nbash scripts/merge.sh")).toEqual(['scripts/merge.sh']);
+    expect(find('# 5" display\nbash scripts/merge.sh')).toEqual(['scripts/merge.sh']);
+  });
+
+  it('keeps cross-line context after such a comment', () => {
+    expect(find("# Don't\nbash -c \\\n  'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+  });
+
+  it('checks commands inside a substitution after a comment with a quote', () => {
+    expect(find("echo $(\n# it's\nbash scripts/merge.sh\n)")).toEqual(['scripts/merge.sh']);
+  });
+
+  it('does not treat # inside a word as a comment', () => {
+    expect(find('echo a#b; bash scripts/merge.sh')).toEqual(['scripts/merge.sh']);
+    expect(find('[ ! -f lock ] # comment')).toEqual([]);
+  });
+
+  it('checks here-document bodies, and the commands after them, line by line', () => {
+    expect(
+      find("cat > notes.txt <<'EOF'\nDon't edit\nEOF\nbash -c \\\n  'bash scripts/merge.sh'")
+    ).toEqual(['scripts/merge.sh']);
+    expect(find("bash <<'EOF'\nbash scripts/merge.sh\nEOF")).toEqual(['scripts/merge.sh']);
+    expect(find('cat <<-EOF\n\t# $(bash scripts/merge.sh)\n\tEOF')).toEqual([
+      'scripts/merge.sh',
+    ]);
+    expect(find("cat <<'EOF'\nDon't edit\nEOF\necho done")).toEqual([]);
+    expect(find("cat <<\\EOF >notes.txt\nDon't edit\nEOF\nbash scripts/merge.sh")).toEqual([
+      'scripts/merge.sh',
+    ]);
+  });
+
+  it('treats the word after a here-string as an ordinary word', () => {
+    expect(find("xargs -I{} bash -c 'bash {}' <<< scripts/merge.sh")).toEqual([
+      'scripts/merge.sh',
+    ]);
+  });
+});
+
+describe('ANSI-C and locale quoting', () => {
+  const synced = new Set(['scripts/merge.sh']);
+  const find = (command: string) => findSyncedPathReferences(command, synced);
+
+  it('reads $\'...\' and $"..." as quotes, without the $', () => {
+    expect(find("bash $'scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find('bash $"scripts/merge.sh"')).toEqual(['scripts/merge.sh']);
+    expect(splitShellWords("echo $'don\\'t'")).toEqual(['echo', "don't"]);
+  });
+
+  it("does not let an escaped quote in $'...' hide the rest of the command", () => {
+    expect(find("echo $'don\\'t'; bash scripts/merge.sh")).toEqual(['scripts/merge.sh']);
+    expect(find("echo $(echo $'it\\'s'); bash scripts/merge.sh")).toEqual(['scripts/merge.sh']);
+  });
+
+  it('removes a line continuation inside double quotes, as bash does', () => {
+    expect(find('bash "scripts/merge\\\n.sh"')).toEqual(['scripts/merge.sh']);
+  });
+});
+
+describe('the command string of a nested shell', () => {
+  const synced = new Set(['scripts/merge.sh']);
+  const find = (command: string) => findSyncedPathReferences(command, synced);
+
+  it('is found after further options, -- and redirections following -c', () => {
+    expect(find("bash -c -- 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find('sh -c -- "./scripts/merge.sh"')).toEqual(['scripts/merge.sh']);
+    expect(find("bash -c -e 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash -co pipefail 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash -c 2>/dev/null 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash -c >/dev/null 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+  });
+
+  it('is found for a shell named in any case or as a Windows executable', () => {
+    expect(find("BASH -c 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash.exe -c 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("'C:\\Program Files\\Git\\bin\\bash.exe' -c 'bash scripts/merge.sh'")).toEqual([
+      'scripts/merge.sh',
+    ]);
+  });
+
+  it('ends with the command that ran the shell', () => {
+    expect(find("bash -c 'true'; jq -c '.[0] * .[1]' a.json")).toEqual([]);
+  });
+});
+
+describe('deeply nested hook commands', () => {
+  const synced = new Set(['scripts/merge.sh']);
+
+  it('rejects nesting deeper than the check follows, without overflowing the stack', () => {
+    const command = `${'$('.repeat(5000)}true${')'.repeat(5000)}`;
+    expect(() => findSyncedPathReferences(command, synced)).toThrow(ConfigError);
+    expect(() => findSyncedPathReferences(`${'eval '.repeat(10000)}true`, synced)).toThrow(
+      /more than 32 levels deep/
+    );
+  });
+
+  it('names the hook when it rejects deep nesting', () => {
+    const hooks: HooksConfig = {
+      preSync: [`${'eval '.repeat(40)}true`],
+      transform: [],
+      postSync: [],
+    };
+    expect(() => checkHookReferences(hooks, ['scripts/merge.sh'])).toThrow(
+      /^hooks\.pre-sync: command 'eval .* more than 32 levels deep$/
+    );
+  });
+
+  it('follows nesting up to the limit', () => {
+    const command = `${'eval '.repeat(30)}bash scripts/merge.sh`;
+    expect(findSyncedPathReferences(command, synced)).toEqual(['scripts/merge.sh']);
+  });
+});

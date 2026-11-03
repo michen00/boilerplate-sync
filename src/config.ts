@@ -410,6 +410,34 @@ const SHELLS = new Set(['bash', 'sh', 'dash', 'zsh', 'ksh', 'ash']);
 const SHELL_COMMAND_OPTION = /^-[A-Za-z]*c[A-Za-z]*$/;
 
 /**
+ * Deepest nesting of substitutions, shell strings, evals, comments and
+ * here-documents that the synced-path check follows before rejecting the
+ * command
+ */
+const MAX_NESTING = 32;
+
+/**
+ * Whether a word names a shell, by path or as a Windows executable, in any
+ * case: case-insensitive filesystems run `BASH` and `bash.exe` as bash
+ */
+function isShell(word: string): boolean {
+  const name = path.posix.basename(word.replace(/\\/g, '/')).toLowerCase();
+  return SHELLS.has(name.replace(/\.exe$/, ''));
+}
+
+/** A here-document whose body starts on the line after its `<<` operator */
+interface Heredoc {
+  delimiter: string;
+  stripTabs: boolean;
+}
+
+/** Index of the newline that ends the line containing `start`, or the command's length */
+function lineEnd(command: string, start: number): number {
+  const newline = command.indexOf('\n', start);
+  return newline < 0 ? command.length : newline;
+}
+
+/**
  * A shell word: its text after quote removal, the glob pattern bash expands
  * it with (quoted and escaped characters escaped again, so only unquoted
  * glob syntax stays magic), and whether it starts a simple command
@@ -422,12 +450,12 @@ interface ShellWord {
 
 /**
  * Index of the `)` that closes a `$(` whose body starts at `start`, or the
- * command's length when it is unterminated. Parentheses inside single or
- * double quotes, or escaped with a backslash, do not count.
+ * command's length when it is unterminated. Parentheses inside quotes or
+ * comments, or escaped with a backslash, do not count.
  */
 function closingParen(command: string, start: number): number {
   let depth = 1;
-  let quote: "'" | '"' | null = null;
+  let quote: "'" | '"' | "$'" | null = null;
 
   for (let i = start; i < command.length; i++) {
     const ch = command[i];
@@ -437,8 +465,15 @@ function closingParen(command: string, start: number): number {
       i++;
     } else if (quote === '"') {
       if (ch === '"') quote = null;
+    } else if (quote === "$'") {
+      if (ch === "'") quote = null;
+    } else if (ch === '$' && command[i + 1] === "'") {
+      quote = "$'";
+      i++;
     } else if (ch === "'" || ch === '"') {
       quote = ch;
+    } else if (ch === '#' && (i === start || /[\s;&|()]/.test(command[i - 1]))) {
+      i = lineEnd(command, i) - 1;
     } else if (ch === '(') {
       depth++;
     } else if (ch === ')' && --depth === 0) {
@@ -461,20 +496,81 @@ function closingBacktick(command: string, start: number): number {
 }
 
 /**
+ * Read the delimiter of a here-document whose `<<` ends just before `start`,
+ * queue it, and return the index after the delimiter
+ */
+function readHeredocDelimiter(command: string, start: number, heredocs: Heredoc[]): number {
+  let i = start;
+  const stripTabs = command[i] === '-';
+  if (stripTabs) i++;
+  while (command[i] === ' ' || command[i] === '\t') i++;
+
+  let delimiter = '';
+  while (i < command.length && !/[\s;&|()<>]/.test(command[i])) {
+    const ch = command[i];
+    if (ch === "'" || ch === '"') {
+      const close = command.indexOf(ch, i + 1);
+      const end = close < 0 ? command.length : close;
+      delimiter += command.slice(i + 1, end);
+      i = end + 1;
+    } else if (ch === '\\') {
+      delimiter += command[i + 1] ?? '';
+      i += 2;
+    } else {
+      delimiter += ch;
+      i++;
+    }
+  }
+
+  if (delimiter !== '') heredocs.push({ delimiter, stripTabs });
+  return i;
+}
+
+/**
+ * Push the body of each queued here-document, starting at `start`, to
+ * `nested`, and return the index after the last delimiter line. A body is
+ * checked as a command of its own because a shell may run it (`bash <<EOF`)
+ * and because an unquoted body runs its substitutions.
+ */
+function readHeredocBodies(
+  command: string,
+  start: number,
+  heredocs: Heredoc[],
+  nested: string[]
+): number {
+  let i = start;
+  for (const { delimiter, stripTabs } of heredocs) {
+    const body: string[] = [];
+    while (i < command.length) {
+      const end = lineEnd(command, i);
+      const line = command.slice(i, end);
+      i = end + 1;
+      if ((stripTabs ? line.replace(/^\t+/, '') : line) === delimiter) break;
+      body.push(line);
+    }
+    nested.push(body.join('\n'));
+  }
+  return i;
+}
+
+/**
  * Split a command into shell words, honouring quotes and backslash escapes
- * and treating shell operators and newlines as separators. The body of each
- * command substitution, `$(...)` or backticks, unquoted or inside double
- * quotes, is pushed to `substitutions` for the caller to check as a command
- * of its own. It does not expand variables: it finds the paths a command
+ * and treating shell operators and newlines as separators. Strings that bash
+ * may run, or that a misread quote could otherwise hide, are pushed to
+ * `nested` for the caller to check as commands of their own: the body of
+ * each command substitution, `$(...)` or backticks, unquoted or inside
+ * double quotes; the text of each comment; and the body of each
+ * here-document. It does not expand variables: it finds the paths a command
  * names, and is not a shell parser.
  */
-function splitShellTokens(command: string, substitutions: string[]): ShellWord[] {
+function splitShellTokens(command: string, nested: string[]): ShellWord[] {
   const words: ShellWord[] = [];
   let text = '';
   let pattern = '';
   let inWord = false;
   let atCommandStart = true;
-  let quote: "'" | '"' | null = null;
+  let quote: "'" | '"' | "$'" | null = null;
+  const heredocs: Heredoc[] = [];
 
   const literal = (ch: string): void => {
     text += ch;
@@ -501,18 +597,32 @@ function splitShellTokens(command: string, substitutions: string[]): ShellWord[]
       continue;
     }
 
+    // ANSI-C quoting: a backslash escapes the next character, so `\'` does
+    // not end the quote
+    if (quote === "$'") {
+      if (ch === "'") {
+        quote = null;
+      } else if (ch === '\\' && next !== undefined) {
+        literal(next);
+        i++;
+      } else {
+        literal(ch);
+      }
+      continue;
+    }
+
     // A substitution runs even inside double quotes; its output joins the
     // current word, but its body is a command bash executes.
     if (ch === '$' && next === '(') {
       const end = closingParen(command, i + 2);
-      substitutions.push(command.slice(i + 2, end));
+      nested.push(command.slice(i + 2, end));
       inWord = true;
       i = end;
       continue;
     }
     if (ch === '`') {
       const end = closingBacktick(command, i + 1);
-      substitutions.push(command.slice(i + 1, end));
+      nested.push(command.slice(i + 1, end));
       inWord = true;
       i = end;
       continue;
@@ -521,6 +631,9 @@ function splitShellTokens(command: string, substitutions: string[]): ShellWord[]
     if (quote === '"') {
       if (ch === '"') {
         quote = null;
+      } else if (ch === '\\' && next === '\n') {
+        // Line continuation, which bash removes inside double quotes too
+        i++;
       } else if (ch === '\\' && next !== undefined && '"\\$`'.includes(next)) {
         literal(next);
         i++;
@@ -530,9 +643,30 @@ function splitShellTokens(command: string, substitutions: string[]): ShellWord[]
       continue;
     }
 
-    if (ch === "'" || ch === '"') {
+    if (ch === '$' && (next === "'" || next === '"')) {
+      // $'...' (ANSI-C) and $"..." (locale) quoting: the `$` is not part of
+      // the word
+      quote = next === "'" ? "$'" : '"';
+      inWord = true;
+      i++;
+    } else if (ch === "'" || ch === '"') {
       quote = ch;
       inWord = true;
+    } else if (ch === '#' && !inWord) {
+      // A comment runs to the end of the line. Its text is checked as a
+      // command of its own, so a quote in it, as in "# Don't", cannot hide
+      // the lines after it.
+      const end = lineEnd(command, i);
+      nested.push(command.slice(i + 1, end));
+      i = end - 1;
+    } else if (ch === '<' && next === '<') {
+      endWord();
+      if (command[i + 2] === '<') {
+        // A here-string: the word after `<<<` is an ordinary word
+        i += 2;
+      } else {
+        i = readHeredocDelimiter(command, i + 2, heredocs) - 1;
+      }
     } else if (ch === '\\') {
       if (next === '\n') {
         // Line continuation: joins lines without adding a character
@@ -554,6 +688,9 @@ function splitShellTokens(command: string, substitutions: string[]): ShellWord[]
     } else if (ch === '\n' || SHELL_SEPARATORS.has(ch)) {
       endWord();
       atCommandStart = true;
+      if (ch === '\n' && heredocs.length > 0) {
+        i = readHeredocBodies(command, i + 1, heredocs.splice(0), nested) - 1;
+      }
     } else if (/\s/.test(ch)) {
       endWord();
     } else {
@@ -591,12 +728,13 @@ function pathCandidates(word: string): string[] {
 }
 
 /**
- * The strings bash runs as commands of their own: the argument after a
- * shell's `-c` option, and the joined arguments of `eval`
+ * The strings bash runs as commands of their own: the words after a shell's
+ * `-c` option, and the joined arguments of `eval`
  */
 function nestedCommands(words: ShellWord[]): string[] {
   const nested: string[] = [];
   let inShell = false;
+  let afterCommandOption = false;
   let evalArgs: string[] | undefined;
 
   const endCommand = (): void => {
@@ -604,27 +742,30 @@ function nestedCommands(words: ShellWord[]): string[] {
       nested.push(evalArgs.join(' '));
     }
     inShell = false;
+    afterCommandOption = false;
     evalArgs = undefined;
   };
 
-  words.forEach((word, index) => {
+  for (const word of words) {
     if (word.startsCommand) {
       endCommand();
     }
 
     if (evalArgs !== undefined) {
       evalArgs.push(word.text);
+    } else if (afterCommandOption) {
+      // The shell runs the first operand after `-c`, which may follow more
+      // options, `--`, or a redirection (`bash -c -- '...'`,
+      // `bash -c 2>/dev/null '...'`). Check every word rather than guess.
+      nested.push(word.text);
     } else if (word.text === 'eval') {
       evalArgs = [];
-    } else if (SHELLS.has(path.posix.basename(word.text))) {
+    } else if (isShell(word.text)) {
       inShell = true;
     } else if (inShell && SHELL_COMMAND_OPTION.test(word.text)) {
-      const argument = words[index + 1];
-      if (argument !== undefined && !argument.startsCommand) {
-        nested.push(argument.text);
-      }
+      afterCommandOption = true;
     }
-  });
+  }
 
   endCommand();
   return nested;
@@ -633,23 +774,41 @@ function nestedCommands(words: ShellWord[]): string[] {
 /**
  * Find the synced local paths that a command names: directly, through an
  * unquoted glob that bash would expand to them, or inside a command
- * substitution, a `bash -c` string or an `eval`. `synced` must hold
- * normalised paths; checkHookReferences adds each in both its slash form
- * (normalizeLocalPath) and its raw form (normalizeGlobPattern).
+ * substitution, a `bash -c` string, an `eval`, a comment or a here-document.
+ * `synced` must hold normalised paths; checkHookReferences adds each in both
+ * its slash form (normalizeLocalPath) and its raw form (normalizeGlobPattern).
+ * Throws a ConfigError when the command nests more than MAX_NESTING deep.
  */
 export function findSyncedPathReferences(
   command: string,
   synced: ReadonlySet<string>
 ): string[] {
-  const found = new Set<string>();
-  const substitutions: string[] = [];
-  const words = splitShellTokens(command, substitutions);
   // Compare ignoring case: a case-insensitive filesystem (Windows, default
   // macOS) opens scripts/merge.sh for SCRIPTS/merge.sh. Report the synced
   // path as configured.
   const syncedByLowerCase = new Map(
     Array.from(synced, (syncedPath) => [syncedPath.toLowerCase(), syncedPath] as const)
   );
+  const found = new Set<string>();
+  collectSyncedPathReferences(command, synced, syncedByLowerCase, 0, found);
+  return [...found];
+}
+
+function collectSyncedPathReferences(
+  command: string,
+  synced: ReadonlySet<string>,
+  syncedByLowerCase: ReadonlyMap<string, string>,
+  depth: number,
+  found: Set<string>
+): void {
+  if (depth > MAX_NESTING) {
+    throw new ConfigError(
+      `nests command substitutions, shell strings or evals more than ${MAX_NESTING} levels deep`
+    );
+  }
+
+  const nested: string[] = [];
+  const words = splitShellTokens(command, nested);
 
   for (const word of words) {
     const texts = pathCandidates(word.text);
@@ -665,8 +824,10 @@ export function findSyncedPathReferences(
 
       const pattern = normalizeGlobPattern(patterns[index]);
       if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
+        // Compile once per word: brace expansion can make a pattern costly
+        const matcher = new Minimatch(pattern, SHELL_GLOB_MATCH_OPTIONS);
         for (const syncedPath of synced) {
-          if (minimatch(syncedPath, pattern, SHELL_GLOB_MATCH_OPTIONS)) {
+          if (matcher.match(syncedPath)) {
             found.add(syncedPath);
           }
         }
@@ -674,15 +835,19 @@ export function findSyncedPathReferences(
     });
   }
 
-  // Each nested string is shorter than the command it came from, so the
-  // recursion ends
-  for (const nested of [...nestedCommands(words), ...substitutions]) {
-    for (const syncedPath of findSyncedPathReferences(nested, synced)) {
-      found.add(syncedPath);
-    }
+  for (const inner of [...nestedCommands(words), ...nested]) {
+    collectSyncedPathReferences(inner, synced, syncedByLowerCase, depth + 1, found);
   }
 
-  return [...found];
+  // Check each line on its own as well, starting outside any quote, so a
+  // quote this tokenizer misreads cannot hide the lines after it. A single
+  // line is not split again, so this recursion ends.
+  const lines = command.split('\n');
+  if (lines.length > 1) {
+    for (const line of lines) {
+      collectSyncedPathReferences(line, synced, syncedByLowerCase, depth, found);
+    }
+  }
 }
 
 /**
@@ -722,7 +887,15 @@ export function checkHookReferences(
   );
 
   for (const { label, command } of labelledHookCommands(hooks)) {
-    const [first] = findSyncedPathReferences(command, synced);
+    let first: string | undefined;
+    try {
+      [first] = findSyncedPathReferences(command, synced);
+    } catch (error) {
+      if (error instanceof ConfigError) {
+        throw new ConfigError(`${label}: command '${command}' ${error.message}`);
+      }
+      throw error;
+    }
     if (first !== undefined) {
       throw new ConfigError(
         `${label}: command '${command}' names synced path '${first}'; ` +
