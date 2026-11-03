@@ -424,6 +424,17 @@ describe('syncFiles glob expansion', () => {
     expect(summary.total).toBe(1);
   });
 
+  it('rejects a glob in file_pairs before pre-sync runs', async () => {
+    const sync = syncFiles({
+      ...globInputs,
+      sources: [{ source: 'owner/repo', file_pairs: [{ local_path: 'ci/*.yml' }] }],
+      hooks: { preSync: ['test -f lock'], transform: [], postSync: [] },
+    });
+
+    await expect(sync).rejects.toThrow(ConfigError);
+    expect(runHookCommands).not.toHaveBeenCalled();
+  });
+
   it('rejects a glob in a file_pairs source instead of silently expanding it', async () => {
     // A glob in file_pairs would lose its explicit local_path if expanded
     // (the README forbids globs here); fail fast rather than silently remap.
