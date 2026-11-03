@@ -10,6 +10,7 @@ import {
   assignTransforms,
   checkHookReferences,
   ConfigError,
+  isUnexpandedGlob,
   normalizeSources,
 } from './config';
 import { runHookCommands, runTransform } from './hooks';
@@ -246,8 +247,8 @@ export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
     // syncs, and copies from an earlier sync may still be in the workspace.
     // Fail closed rather than run hooks that cannot be checked against them.
     const unexpanded = expandedConfigs
-      .filter((config) => isGlobPattern(config.local_path))
-      .map((config) => `'${config.local_path}'`);
+      .filter(isUnexpandedGlob)
+      .map((config) => `'${config.source_path}'`);
     if (unexpanded.length > 0) {
       throw new ConfigError(
         `hooks: ${unexpanded.join(', ')} did not expand to any file, so hook ` +

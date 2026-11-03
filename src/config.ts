@@ -399,12 +399,54 @@ interface ShellWord {
 }
 
 /**
+ * Index of the `)` that closes a `$(` whose body starts at `start`, or the
+ * command's length when it is unterminated. Parentheses inside single or
+ * double quotes, or escaped with a backslash, do not count.
+ */
+function closingParen(command: string, start: number): number {
+  let depth = 1;
+  let quote: "'" | '"' | null = null;
+
+  for (let i = start; i < command.length; i++) {
+    const ch = command[i];
+    if (quote === "'") {
+      if (ch === "'") quote = null;
+    } else if (ch === '\\') {
+      i++;
+    } else if (quote === '"') {
+      if (ch === '"') quote = null;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
+    } else if (ch === '(') {
+      depth++;
+    } else if (ch === ')' && --depth === 0) {
+      return i;
+    }
+  }
+  return command.length;
+}
+
+/**
+ * Index of the backtick that closes one opened just before `start`, or the
+ * command's length when it is unterminated
+ */
+function closingBacktick(command: string, start: number): number {
+  for (let i = start; i < command.length; i++) {
+    if (command[i] === '\\') i++;
+    else if (command[i] === '`') return i;
+  }
+  return command.length;
+}
+
+/**
  * Split a command into shell words, honouring quotes and backslash escapes
- * and treating shell operators and newlines as separators. It does not
- * expand variables or command substitutions: it finds the paths a command
+ * and treating shell operators and newlines as separators. The body of each
+ * command substitution, `$(...)` or backticks, unquoted or inside double
+ * quotes, is pushed to `substitutions` for the caller to check as a command
+ * of its own. It does not expand variables: it finds the paths a command
  * names, and is not a shell parser.
  */
-function splitShellTokens(command: string): ShellWord[] {
+function splitShellTokens(command: string, substitutions: string[]): ShellWord[] {
   const words: ShellWord[] = [];
   let text = '';
   let pattern = '';
@@ -434,6 +476,23 @@ function splitShellTokens(command: string): ShellWord[] {
     if (quote === "'") {
       if (ch === "'") quote = null;
       else literal(ch);
+      continue;
+    }
+
+    // A substitution runs even inside double quotes; its output joins the
+    // current word, but its body is a command bash executes.
+    if (ch === '$' && next === '(') {
+      const end = closingParen(command, i + 2);
+      substitutions.push(command.slice(i + 2, end));
+      inWord = true;
+      i = end;
+      continue;
+    }
+    if (ch === '`') {
+      const end = closingBacktick(command, i + 1);
+      substitutions.push(command.slice(i + 1, end));
+      inWord = true;
+      i = end;
       continue;
     }
 
@@ -481,7 +540,7 @@ function splitShellTokens(command: string): ShellWord[] {
  * Split a command into shell words (see splitShellTokens)
  */
 export function splitShellWords(command: string): string[] {
-  return splitShellTokens(command).map((word) => word.text);
+  return splitShellTokens(command, []).map((word) => word.text);
 }
 
 /**
@@ -542,15 +601,17 @@ function nestedCommands(words: ShellWord[]): string[] {
 
 /**
  * Find the synced local paths that a command names: directly, through an
- * unquoted glob that bash would expand to them, or inside a `bash -c` or
- * `eval` string. `synced` must hold normalised paths (see normalizeLocalPath).
+ * unquoted glob that bash would expand to them, or inside a command
+ * substitution, a `bash -c` string or an `eval`. `synced` must hold
+ * normalised paths (see normalizeLocalPath).
  */
 export function findSyncedPathReferences(
   command: string,
   synced: ReadonlySet<string>
 ): string[] {
   const found = new Set<string>();
-  const words = splitShellTokens(command);
+  const substitutions: string[] = [];
+  const words = splitShellTokens(command, substitutions);
 
   for (const word of words) {
     const texts = pathCandidates(word.text);
@@ -575,7 +636,7 @@ export function findSyncedPathReferences(
 
   // Each nested string is shorter than the command it came from, so the
   // recursion ends
-  for (const nested of nestedCommands(words)) {
+  for (const nested of [...nestedCommands(words), ...substitutions]) {
     for (const syncedPath of findSyncedPathReferences(nested, synced)) {
       found.add(syncedPath);
     }
@@ -658,6 +719,16 @@ export function validateHooks(hooks: HooksConfig, sources: SourceConfig[]): void
 }
 
 /**
+ * Whether glob expansion left this config unexpanded, because listing the
+ * source tree failed or nothing matched. Judged by provenance, not by the
+ * characters in the path: a concrete file such as `foo[ab].txt` that a glob
+ * expanded to, or a `file_pairs` destination with that name, is not one.
+ */
+export function isUnexpandedGlob(config: NormalizedFileSyncConfig): boolean {
+  return config.expandedFrom === undefined && isGlobPattern(config.source_path);
+}
+
+/**
  * Choose the transform rule for each expanded config, by index. Throws when
  * a file matches more than one key, and warns about keys that match nothing.
  */
@@ -670,7 +741,7 @@ export function assignTransforms(
   const assigned = configs.map((config) => {
     // A glob that failed to expand keeps its pattern as local_path and will
     // fail during sync; there is no file to transform.
-    if (isGlobPattern(config.local_path)) {
+    if (isUnexpandedGlob(config)) {
       return undefined;
     }
 

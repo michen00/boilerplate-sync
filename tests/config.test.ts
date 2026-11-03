@@ -1110,3 +1110,45 @@ describe('parseHooksInput edge cases', () => {
     expect(() => parseHooksInput('transform:\n  "": cat')).toThrow(/keys must be non-empty/);
   });
 });
+
+describe('findSyncedPathReferences through command substitutions', () => {
+  const synced = new Set(['scripts/merge.sh']);
+  const find = (command: string) => findSyncedPathReferences(command, synced);
+
+  it('checks $(...) and backtick bodies, inside double quotes too', () => {
+    expect(find('echo "$(bash scripts/merge.sh)"')).toEqual(['scripts/merge.sh']);
+    expect(find('x=`bash scripts/merge.sh`')).toEqual(['scripts/merge.sh']);
+    expect(find('echo "`./scripts/merge.sh`"')).toEqual(['scripts/merge.sh']);
+    expect(find('x=`echo \\`; bash scripts/merge.sh`')).toEqual(['scripts/merge.sh']);
+    expect(find('echo $(cat "$(echo scripts/merge.sh)")')).toEqual(['scripts/merge.sh']);
+    expect(find('echo "$(printf %s ")"; bash scripts/m*.sh)"')).toEqual(['scripts/merge.sh']);
+    expect(find("echo $(printf %s ')'; bash scripts/merge.sh)")).toEqual(['scripts/merge.sh']);
+    expect(find('echo $(printf %s \\); bash scripts/merge.sh)')).toEqual(['scripts/merge.sh']);
+  });
+
+  it('checks an unterminated substitution to the end of the command', () => {
+    expect(find('echo "$(bash scripts/merge.sh')).toEqual(['scripts/merge.sh']);
+    expect(find('echo `bash scripts/merge.sh')).toEqual(['scripts/merge.sh']);
+  });
+
+  it('leaves quoted or escaped substitution syntax alone, as bash does', () => {
+    expect(find("echo '$(bash scripts/merge.sh)'")).toEqual([]);
+    expect(find('echo "\\$(bash scripts/merge.sh)"')).toEqual([]);
+    expect(find('echo "$((1 + 2))"')).toEqual([]);
+  });
+});
+
+describe('assignTransforms with concrete bracketed paths', () => {
+  it('transforms a file whose name contains glob characters', () => {
+    const rule = { pattern: 'docs/*.md', command: 'cat' };
+    const expanded: NormalizedFileSyncConfig = {
+      local_path: 'docs/a[ab].md',
+      source_path: 'docs/a[ab].md',
+      source: 'org/repo',
+      origin: 'default_files',
+      expandedFrom: 'docs/*.md',
+    };
+
+    expect(assignTransforms([expanded], [rule])).toEqual([rule]);
+  });
+});

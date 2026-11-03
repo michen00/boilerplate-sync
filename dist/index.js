@@ -33340,7 +33340,35 @@ var SHELL_GLOB_OPTIONS = {
 };
 var SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "dash", "zsh", "ksh", "ash"]);
 var SHELL_COMMAND_OPTION = /^-[A-Za-z]*c[A-Za-z]*$/;
-function splitShellTokens(command) {
+function closingParen(command, start) {
+  let depth = 1;
+  let quote = null;
+  for (let i = start; i < command.length; i++) {
+    const ch = command[i];
+    if (quote === "'") {
+      if (ch === "'") quote = null;
+    } else if (ch === "\\") {
+      i++;
+    } else if (quote === '"') {
+      if (ch === '"') quote = null;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
+    } else if (ch === "(") {
+      depth++;
+    } else if (ch === ")" && --depth === 0) {
+      return i;
+    }
+  }
+  return command.length;
+}
+function closingBacktick(command, start) {
+  for (let i = start; i < command.length; i++) {
+    if (command[i] === "\\") i++;
+    else if (command[i] === "`") return i;
+  }
+  return command.length;
+}
+function splitShellTokens(command, substitutions) {
   const words = [];
   let text = "";
   let pattern = "";
@@ -33366,6 +33394,20 @@ function splitShellTokens(command) {
     if (quote === "'") {
       if (ch === "'") quote = null;
       else literal2(ch);
+      continue;
+    }
+    if (ch === "$" && next === "(") {
+      const end = closingParen(command, i + 2);
+      substitutions.push(command.slice(i + 2, end));
+      inWord = true;
+      i = end;
+      continue;
+    }
+    if (ch === "`") {
+      const end = closingBacktick(command, i + 1);
+      substitutions.push(command.slice(i + 1, end));
+      inWord = true;
+      i = end;
       continue;
     }
     if (quote === '"') {
@@ -33445,7 +33487,8 @@ function nestedCommands(words) {
 }
 function findSyncedPathReferences(command, synced) {
   const found = /* @__PURE__ */ new Set();
-  const words = splitShellTokens(command);
+  const substitutions = [];
+  const words = splitShellTokens(command, substitutions);
   for (const word of words) {
     const texts = pathCandidates(word.text);
     const patterns = pathCandidates(word.pattern);
@@ -33464,7 +33507,7 @@ function findSyncedPathReferences(command, synced) {
       }
     });
   }
-  for (const nested of nestedCommands(words)) {
+  for (const nested of [...nestedCommands(words), ...substitutions]) {
     for (const syncedPath of findSyncedPathReferences(nested, synced)) {
       found.add(syncedPath);
     }
@@ -33511,10 +33554,13 @@ function validateHooks(hooks, sources) {
   }
   checkHookReferences(hooks, literalPaths);
 }
+function isUnexpandedGlob(config) {
+  return config.expandedFrom === void 0 && isGlobPattern(config.source_path);
+}
 function assignTransforms(configs, rules) {
   const used = /* @__PURE__ */ new Set();
   const assigned = configs.map((config) => {
-    if (isGlobPattern(config.local_path)) {
+    if (isUnexpandedGlob(config)) {
       return void 0;
     }
     const localPath = normalizeLocalPath(config.local_path);
@@ -33931,7 +33977,7 @@ async function syncFiles(inputs) {
   const expandedConfigs = await expandGlobPatterns(normalizedConfigs, githubToken);
   let transforms = [];
   if (hooks) {
-    const unexpanded = expandedConfigs.filter((config) => isGlobPattern(config.local_path)).map((config) => `'${config.local_path}'`);
+    const unexpanded = expandedConfigs.filter(isUnexpandedGlob).map((config) => `'${config.source_path}'`);
     if (unexpanded.length > 0) {
       throw new ConfigError(
         `hooks: ${unexpanded.join(", ")} did not expand to any file, so hook commands cannot be checked against the paths it syncs; no hook was run`

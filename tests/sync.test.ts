@@ -727,6 +727,24 @@ describe('syncFiles hook checks after glob expansion', () => {
     expect(createGitHubSource).not.toHaveBeenCalled();
   });
 
+  it('does not mistake a concrete bracketed file for an unexpanded glob', async () => {
+    vi.mocked(isGlobPattern).mockImplementation((pattern: string) => /[*?[]/.test(pattern));
+    vi.mocked(listFilesMatchingGlob).mockImplementation(async (_o, _r, pattern) =>
+      pattern === 'scripts/**' ? ['scripts/fmt[1].sh'] : ['docs/a.md']
+    );
+
+    const summary = await syncFiles({
+      ...globInputs(withHooks({ postSync: ['npm test'] })),
+      sources: [
+        { source: 'owner/repo', ref: 'main', default_files: ['scripts/**', 'docs/*.md'] },
+        { source: 'owner/repo', file_pairs: [{ local_path: 'conf[1].json', source_path: 'conf.json' }] },
+      ],
+    });
+
+    expect(summary.total).toBe(3);
+    expect(createGitHubSource).toHaveBeenCalledTimes(3);
+  });
+
   it('fails closed when a glob matches no file', async () => {
     vi.mocked(listFilesMatchingGlob).mockImplementation(async (_o, _r, pattern) =>
       pattern === 'scripts/**' ? [] : ['docs/a.md']
