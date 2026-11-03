@@ -33496,9 +33496,10 @@ function findSyncedPathReferences(command, synced) {
     const texts = pathCandidates(word.text);
     const patterns = pathCandidates(word.pattern);
     texts.forEach((text, index) => {
-      const literalPath = normalizeLocalPath(text);
-      if (synced.has(literalPath)) {
-        found.add(literalPath);
+      for (const literalPath of [normalizeLocalPath(text), normalizeGlobPattern(text)]) {
+        if (synced.has(literalPath)) {
+          found.add(literalPath);
+        }
       }
       const pattern = normalizeGlobPattern(patterns[index]);
       if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
@@ -33528,7 +33529,12 @@ function labelledHookCommands(hooks) {
   ];
 }
 function checkHookReferences(hooks, localPaths) {
-  const synced = new Set(Array.from(localPaths, normalizeLocalPath));
+  const synced = new Set(
+    Array.from(localPaths).flatMap((localPath) => [
+      normalizeLocalPath(localPath),
+      normalizeGlobPattern(localPath)
+    ])
+  );
   for (const { label, command } of labelledHookCommands(hooks)) {
     const [first] = findSyncedPathReferences(command, synced);
     if (first !== void 0) {
@@ -33540,9 +33546,8 @@ function checkHookReferences(hooks, localPaths) {
 }
 function validateHooks(hooks, sources) {
   const configs = normalizeSources(sources);
-  const literalPaths = new Set(
-    configs.filter((config) => !isGlobPattern(config.source_path)).map((config) => normalizeLocalPath(config.local_path))
-  );
+  const literalLocalPaths = configs.filter((config) => !isGlobPattern(config.source_path)).map((config) => config.local_path);
+  const literalPaths = new Set(literalLocalPaths.map(normalizeLocalPath));
   const globs = configs.filter((config) => config.origin === "default_files" && isGlobPattern(config.source_path)).map((config) => normalizeGlobPattern(config.source_path));
   for (const rule of hooks.transform) {
     if (isGlobPattern(rule.pattern)) {
@@ -33555,7 +33560,7 @@ function validateHooks(hooks, sources) {
       );
     }
   }
-  checkHookReferences(hooks, literalPaths);
+  checkHookReferences(hooks, literalLocalPaths);
 }
 function isUnexpandedGlob(config) {
   return config.expandedFrom === void 0 && isGlobPattern(config.source_path);

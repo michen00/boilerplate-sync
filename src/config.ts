@@ -614,7 +614,8 @@ function nestedCommands(words: ShellWord[]): string[] {
  * Find the synced local paths that a command names: directly, through an
  * unquoted glob that bash would expand to them, or inside a command
  * substitution, a `bash -c` string or an `eval`. `synced` must hold
- * normalised paths (see normalizeLocalPath).
+ * normalised paths; checkHookReferences adds each in both its slash form
+ * (normalizeLocalPath) and its raw form (normalizeGlobPattern).
  */
 export function findSyncedPathReferences(
   command: string,
@@ -629,9 +630,10 @@ export function findSyncedPathReferences(
     const patterns = pathCandidates(word.pattern);
 
     texts.forEach((text, index) => {
-      const literalPath = normalizeLocalPath(text);
-      if (synced.has(literalPath)) {
-        found.add(literalPath);
+      for (const literalPath of [normalizeLocalPath(text), normalizeGlobPattern(text)]) {
+        if (synced.has(literalPath)) {
+          found.add(literalPath);
+        }
       }
 
       const pattern = normalizeGlobPattern(patterns[index]);
@@ -680,7 +682,17 @@ export function checkHookReferences(
   hooks: HooksConfig,
   localPaths: Iterable<string>
 ): void {
-  const synced = new Set(Array.from(localPaths, normalizeLocalPath));
+  // Keep each path in both forms. The slash form matches what a Windows
+  // runner reads as the same file; the raw form keeps a literal backslash,
+  // which is an ordinary filename character on Linux and which a glob such
+  // as `scripts?merge.sh` reaches there. A hook is flagged if either form
+  // matches, so neither runner OS can be used to slip past the check.
+  const synced = new Set(
+    Array.from(localPaths).flatMap((localPath) => [
+      normalizeLocalPath(localPath),
+      normalizeGlobPattern(localPath),
+    ])
+  );
 
   for (const { label, command } of labelledHookCommands(hooks)) {
     const [first] = findSyncedPathReferences(command, synced);
@@ -703,11 +715,10 @@ export function checkHookReferences(
 export function validateHooks(hooks: HooksConfig, sources: SourceConfig[]): void {
   const configs = normalizeSources(sources);
 
-  const literalPaths = new Set(
-    configs
-      .filter((config) => !isGlobPattern(config.source_path))
-      .map((config) => normalizeLocalPath(config.local_path))
-  );
+  const literalLocalPaths = configs
+    .filter((config) => !isGlobPattern(config.source_path))
+    .map((config) => config.local_path);
+  const literalPaths = new Set(literalLocalPaths.map(normalizeLocalPath));
   const globs = configs
     .filter((config) => config.origin === 'default_files' && isGlobPattern(config.source_path))
     .map((config) => normalizeGlobPattern(config.source_path));
@@ -726,7 +737,8 @@ export function validateHooks(hooks: HooksConfig, sources: SourceConfig[]): void
     }
   }
 
-  checkHookReferences(hooks, literalPaths);
+  // Pass the raw paths: checkHookReferences keeps both separator forms
+  checkHookReferences(hooks, literalLocalPaths);
 }
 
 /**

@@ -1197,6 +1197,23 @@ describe('Windows path separators', () => {
     expect(assignTransforms([config], [rule])).toEqual([rule]);
   });
 
+  it('still matches a literal backslash filename by glob, as bash on Linux would', () => {
+    const hooks: HooksConfig = { preSync: [], transform: [], postSync: ['bash scripts?merge.sh'] };
+
+    expect(() => checkHookReferences(hooks, ['scripts\\merge.sh'])).toThrow(/hooks\.post-sync/);
+  });
+
+  it('keeps the raw backslash form of a file_pairs path for glob matching', () => {
+    const sources = parseSourcesInput(`
+      - source: org/repo
+        file_pairs:
+          - local_path: 'scripts\\merge.sh'
+    `);
+    const hooks: HooksConfig = { preSync: ['bash scripts?merge.sh'], transform: [], postSync: [] };
+
+    expect(() => validateHooks(hooks, sources)).toThrow(/hooks\.pre-sync/);
+  });
+
   it('keeps backslash escapes in glob patterns', () => {
     expect(findSyncedPathReferences('bash scripts/merge\\*.sh', new Set(['scripts/merge.sh']))).toEqual([]);
   });
