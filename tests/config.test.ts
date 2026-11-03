@@ -1050,3 +1050,63 @@ describe('logConfig with hooks', () => {
     expect(logged).toContain('post-sync: npm test');
   });
 });
+
+describe('findSyncedPathReferences through globs and nested shells', () => {
+  const synced = new Set(['scripts/merge.sh', 'package.json', '.envrc']);
+  const find = (command: string) => findSyncedPathReferences(command, synced);
+
+  it('finds a synced path that an unquoted glob would expand to', () => {
+    expect(find('bash scripts/merge*.sh')).toEqual(['scripts/merge.sh']);
+    expect(find('./scripts/m?rge.sh')).toEqual(['scripts/merge.sh']);
+    expect(find('bash scripts/{merge,other}.sh')).toEqual(['scripts/merge.sh']);
+    expect(find('cat *.json')).toEqual(['package.json']);
+    expect(find('node --require=scripts/*.sh')).toEqual(['scripts/merge.sh']);
+  });
+
+  it('treats quoted and escaped glob characters as literal, as bash does', () => {
+    expect(find("bash 'scripts/merge*.sh'")).toEqual([]);
+    expect(find('bash "scripts/merge?.sh"')).toEqual([]);
+    expect(find('bash scripts/merge\\*.sh')).toEqual([]);
+    expect(find("jq -s '.[0] * .[1]' - .github/package.overrides.json")).toEqual([]);
+  });
+
+  it('does not let * match dotfiles, or give ! or # a glob meaning', () => {
+    expect(find('ls *rc')).toEqual([]);
+    expect(find('[ ! -f lock ] # comment')).toEqual([]);
+  });
+
+  it('checks the command string of a nested shell', () => {
+    expect(find("bash -c 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find('sh -ec "./scripts/merge.sh"')).toEqual(['scripts/merge.sh']);
+    expect(find("env FOO=1 /bin/bash -lc 'scripts/m*.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find(`bash -c "bash -c 'bash scripts/merge.sh'"`)).toEqual(['scripts/merge.sh']);
+  });
+
+  it('checks the joined arguments of eval', () => {
+    expect(find("eval 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("eval bash 'scripts/m*.sh'; true")).toEqual(['scripts/merge.sh']);
+  });
+
+  it('leaves -c alone outside a shell, and handles a missing command string', () => {
+    expect(find("jq -c '.[0] * .[1]' overrides.json")).toEqual([]);
+    expect(find('bash -c')).toEqual([]);
+    expect(find('bash -c; echo done')).toEqual([]);
+    expect(find('eval; true')).toEqual([]);
+  });
+});
+
+describe('splitShellWords edge cases', () => {
+  it('drops a trailing backslash', () => {
+    expect(splitShellWords('a b\\')).toEqual(['a', 'b']);
+  });
+
+  it('separates commands on newlines', () => {
+    expect(splitShellWords('npm ci\nnpm test')).toEqual(['npm', 'ci', 'npm', 'test']);
+  });
+});
+
+describe('parseHooksInput edge cases', () => {
+  it('rejects an empty transform key', () => {
+    expect(() => parseHooksInput('transform:\n  "": cat')).toThrow(/keys must be non-empty/);
+  });
+});

@@ -200,7 +200,7 @@ hooks: |
 
 | Key | Value | When it runs |
 | --- | --- | --- |
-| `pre-sync` | A command, or a list of commands | Once, after the configuration is validated and before anything is fetched |
+| `pre-sync` | A command, or a list of commands | Once, after globs are expanded and every hook is checked, and before any file is fetched |
 | `transform` | A map of local path or glob to one command | For each matching file, after the file is fetched and before it is compared with the local file |
 | `post-sync` | A command, or a list of commands | Once, after every file has been processed |
 
@@ -239,7 +239,7 @@ Keys match files by local path, either exactly or as a glob matched the same way
 
 #### Hook failures
 
-- **`pre-sync` fails:** the action fails before any GitHub API call. No file is written and no output is set.
+- **`pre-sync` fails:** the action fails before fetching any file. No file is written and no output is set.
 - **A transform fails:** the file is reported as failed and left untouched (see [Transforms](#transforms)).
 - **`post-sync` fails:** the action fails, whatever `fail-on-error` is set to. The step summary and outputs are written first, so a later step with `if: always()`, or a step marked `continue-on-error`, can still use them. `post-sync` does not run when `fail-on-error` is `true` and a file failed.
 
@@ -250,9 +250,9 @@ Keys match files by local path, either exactly or as a glob matched the same way
 Hooks run arbitrary commands, so only the workflow that uses this action can configure them; synced content cannot. The action also:
 
 - removes every `INPUT_*` and `ACTIONS_*` variable, and `GITHUB_OUTPUT` and `GITHUB_STATE`, from each hook's environment, so hooks never see `github-token`, any `source-token` or the runner's own tokens;
-- rejects a hook command that names a file this action syncs, such as `bash scripts/merge.sh` when `scripts/merge.sh` is synced, because the source repository would then control code that runs in this step.
+- rejects a hook command that names a file this action syncs, because the source repository would then control code that runs in this step. With `scripts/merge.sh` synced, that rejects `bash scripts/merge.sh`, an unquoted glob that expands to it such as `bash scripts/*.sh`, and the same commands inside a `bash -c` or `eval` string. The check runs against every synced path, glob-expanded ones included, before any hook runs, `pre-sync` included.
 
-The second check catches direct references only. A command can still run synced code indirectly: `npm test` runs scripts from a synced `package.json`, and `make` reads a synced `Makefile`. That code runs before anyone reviews the pull request. When synced files define your tests, run the tests in the pull request's CI instead of in `post-sync`. Never put a token in the step's `env:` when you use hooks, because hooks inherit it.
+The second check covers what a command names, not what it runs indirectly. It does not resolve variables, and a command can still run synced code through another program: `npm test` runs scripts from a synced `package.json`, and `make` reads a synced `Makefile`. That code runs before anyone reviews the pull request. When synced files define your tests, run the tests in the pull request's CI instead of in `post-sync`. Never put a token in the step's `env:` when you use hooks, because hooks inherit it.
 
 ## Outputs
 

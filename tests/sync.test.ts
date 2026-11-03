@@ -639,26 +639,22 @@ describe('syncFiles with pre-sync', () => {
     vi.mocked(fs.readFile).mockResolvedValue('mock content');
   });
 
-  it('runs pre-sync once, before any GitHub call, and not post-sync', async () => {
+  it('runs pre-sync once, before fetching any content, and not post-sync', async () => {
     await syncFiles(inputs);
 
     expect(runHookCommands).toHaveBeenCalledTimes(1);
     expect(runHookCommands).toHaveBeenCalledWith('pre-sync', ['test -f lock'], {});
     expect(vi.mocked(runHookCommands).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(isGlobPattern).mock.invocationCallOrder[0]
-    );
-    expect(vi.mocked(runHookCommands).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(createGitHubSource).mock.invocationCallOrder[0]
     );
   });
 
-  it('aborts before any GitHub call or write when pre-sync fails', async () => {
+  it('aborts before fetching any content or writing when pre-sync fails', async () => {
     vi.mocked(runHookCommands).mockRejectedValue(
       new HookError('pre-sync command 1 of 1 exited with code 1: test -f lock')
     );
 
     await expect(syncFiles(inputs)).rejects.toThrow(HookError);
-    expect(listFilesMatchingGlob).not.toHaveBeenCalled();
     expect(createGitHubSource).not.toHaveBeenCalled();
     expect(fs.writeFile).not.toHaveBeenCalled();
   });
@@ -690,6 +686,29 @@ describe('syncFiles hook checks after glob expansion', () => {
     vi.mocked(fs.readFile).mockResolvedValue('old');
     vi.mocked(fs.mkdir).mockResolvedValue(undefined);
     vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+  });
+
+  it('runs pre-sync after glob expansion and the hook checks', async () => {
+    await syncFiles(globInputs(withHooks({ preSync: ['test -f lock'] })));
+
+    const preSync = vi.mocked(runHookCommands).mock.invocationCallOrder[0];
+    expect(preSync).toBeGreaterThan(vi.mocked(listFilesMatchingGlob).mock.invocationCallOrder[1]);
+    expect(preSync).toBeLessThan(vi.mocked(createGitHubSource).mock.invocationCallOrder[0]);
+  });
+
+  it('rejects a pre-sync command that names a glob-expanded path before it runs', async () => {
+    // A previous sync left scripts/fmt.sh, matched by scripts/**, in the workspace
+    const sync = syncFiles(globInputs(withHooks({ preSync: ['bash scripts/fmt.sh'] })));
+
+    await expect(sync).rejects.toThrow(/hooks\.pre-sync.*'scripts\/fmt\.sh'/);
+    expect(runHookCommands).not.toHaveBeenCalled();
+    expect(createGitHubSource).not.toHaveBeenCalled();
+  });
+
+  it('rejects a hook whose unquoted glob would expand to a synced path', async () => {
+    const sync = syncFiles(globInputs(withHooks({ postSync: ['bash scripts/*.sh'] })));
+
+    await expect(sync).rejects.toThrow(/hooks\.post-sync.*'scripts\/fmt\.sh'/);
   });
 
   it('rejects a hook that names an expanded path, before fetching any content', async () => {

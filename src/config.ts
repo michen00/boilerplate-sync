@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import * as path from 'path';
-import { minimatch } from 'minimatch';
+import { Minimatch, minimatch } from 'minimatch';
 import { parse as parseYaml } from 'yaml';
 import { isGlobPattern } from './sources/github';
 import type {
@@ -327,8 +327,8 @@ export function parseHooksInput(hooksYaml: string): HooksConfig | undefined {
   try {
     parsed = parseYaml(hooksYaml);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new ConfigError(`Failed to parse 'hooks' YAML: ${message}`);
+    // yaml throws YAMLParseError, an Error
+    throw new ConfigError(`Failed to parse 'hooks' YAML: ${(error as Error).message}`);
   }
 
   if (parsed === null || parsed === undefined) {
@@ -363,22 +363,66 @@ export function parseHooksInput(hooksYaml: string): HooksConfig | undefined {
 /** Characters that end a shell word outside quotes */
 const SHELL_SEPARATORS = new Set([';', '|', '&', '<', '>', '(', ')']);
 
+/** Characters that are glob or brace syntax to bash when unquoted */
+const GLOB_CHARS = new Set(['*', '?', '[', ']', '{', '}', '\\']);
+
 /**
- * Split a command into shell words. This honours quotes and backslash
- * escapes and treats shell operators as separators. It does not expand
- * variables, globs or command substitutions, so it is good enough to find
- * literal paths but is not a shell parser.
+ * minimatch options that mirror bash pathname expansion with default shell
+ * options: no dotfile matches, no extglob, and no special meaning for a
+ * leading `!` or `#`. Patterns are POSIX on every runner OS.
  */
-export function splitShellWords(command: string): string[] {
-  const words: string[] = [];
-  let current = '';
+const SHELL_GLOB_OPTIONS = {
+  dot: false,
+  noext: true,
+  nonegate: true,
+  nocomment: true,
+  matchBase: false,
+  magicalBraces: true,
+  platform: 'linux',
+} as const;
+
+/** Interpreters whose `-c` argument is itself a shell command */
+const SHELLS = new Set(['bash', 'sh', 'dash', 'zsh', 'ksh', 'ash']);
+
+/** A short option bundle that includes `-c`, such as `-c`, `-ec` or `-lc` */
+const SHELL_COMMAND_OPTION = /^-[A-Za-z]*c[A-Za-z]*$/;
+
+/**
+ * A shell word: its text after quote removal, the glob pattern bash expands
+ * it with (quoted and escaped characters escaped again, so only unquoted
+ * glob syntax stays magic), and whether it starts a simple command
+ */
+interface ShellWord {
+  text: string;
+  pattern: string;
+  startsCommand: boolean;
+}
+
+/**
+ * Split a command into shell words, honouring quotes and backslash escapes
+ * and treating shell operators and newlines as separators. It does not
+ * expand variables or command substitutions: it finds the paths a command
+ * names, and is not a shell parser.
+ */
+function splitShellTokens(command: string): ShellWord[] {
+  const words: ShellWord[] = [];
+  let text = '';
+  let pattern = '';
   let inWord = false;
+  let atCommandStart = true;
   let quote: "'" | '"' | null = null;
+
+  const literal = (ch: string): void => {
+    text += ch;
+    pattern += GLOB_CHARS.has(ch) ? `\\${ch}` : ch;
+  };
 
   const endWord = (): void => {
     if (inWord) {
-      words.push(current);
-      current = '';
+      words.push({ text, pattern, startsCommand: atCommandStart });
+      atCommandStart = false;
+      text = '';
+      pattern = '';
       inWord = false;
     }
   };
@@ -389,7 +433,7 @@ export function splitShellWords(command: string): string[] {
 
     if (quote === "'") {
       if (ch === "'") quote = null;
-      else current += ch;
+      else literal(ch);
       continue;
     }
 
@@ -397,10 +441,10 @@ export function splitShellWords(command: string): string[] {
       if (ch === '"') {
         quote = null;
       } else if (ch === '\\' && next !== undefined && '"\\$`'.includes(next)) {
-        current += next;
+        literal(next);
         i++;
       } else {
-        current += ch;
+        literal(ch);
       }
       continue;
     }
@@ -413,14 +457,18 @@ export function splitShellWords(command: string): string[] {
         // Line continuation: joins lines without adding a character
         i++;
       } else if (next !== undefined) {
-        current += next;
+        literal(next);
         inWord = true;
         i++;
       }
-    } else if (/\s/.test(ch) || SHELL_SEPARATORS.has(ch)) {
+    } else if (ch === '\n' || SHELL_SEPARATORS.has(ch)) {
+      endWord();
+      atCommandStart = true;
+    } else if (/\s/.test(ch)) {
       endWord();
     } else {
-      current += ch;
+      text += ch;
+      pattern += ch;
       inWord = true;
     }
   }
@@ -430,8 +478,17 @@ export function splitShellWords(command: string): string[] {
 }
 
 /**
+ * Split a command into shell words (see splitShellTokens)
+ */
+export function splitShellWords(command: string): string[] {
+  return splitShellTokens(command).map((word) => word.text);
+}
+
+/**
  * The parts of a shell word that may name a file: an option's value
- * (`--config=path`), an assignment and its value (`NAME=path`), or the word
+ * (`--config=path`), an assignment and its value (`NAME=path`), or the word.
+ * A word's text and its pattern give aligned results, because escaping
+ * never touches `-` or `=`.
  */
 function pathCandidates(word: string): string[] {
   const equals = word.indexOf('=');
@@ -444,25 +501,87 @@ function pathCandidates(word: string): string[] {
 }
 
 /**
- * Find the synced local paths that a command names directly.
- * `synced` must hold normalised paths (see normalizeLocalPath).
+ * The strings bash runs as commands of their own: the argument after a
+ * shell's `-c` option, and the joined arguments of `eval`
+ */
+function nestedCommands(words: ShellWord[]): string[] {
+  const nested: string[] = [];
+  let inShell = false;
+  let evalArgs: string[] | undefined;
+
+  const endCommand = (): void => {
+    if (evalArgs !== undefined && evalArgs.length > 0) {
+      nested.push(evalArgs.join(' '));
+    }
+    inShell = false;
+    evalArgs = undefined;
+  };
+
+  words.forEach((word, index) => {
+    if (word.startsCommand) {
+      endCommand();
+    }
+
+    if (evalArgs !== undefined) {
+      evalArgs.push(word.text);
+    } else if (word.text === 'eval') {
+      evalArgs = [];
+    } else if (SHELLS.has(path.posix.basename(word.text))) {
+      inShell = true;
+    } else if (inShell && SHELL_COMMAND_OPTION.test(word.text)) {
+      const argument = words[index + 1];
+      if (argument !== undefined && !argument.startsCommand) {
+        nested.push(argument.text);
+      }
+    }
+  });
+
+  endCommand();
+  return nested;
+}
+
+/**
+ * Find the synced local paths that a command names: directly, through an
+ * unquoted glob that bash would expand to them, or inside a `bash -c` or
+ * `eval` string. `synced` must hold normalised paths (see normalizeLocalPath).
  */
 export function findSyncedPathReferences(
   command: string,
   synced: ReadonlySet<string>
 ): string[] {
-  const found: string[] = [];
+  const found = new Set<string>();
+  const words = splitShellTokens(command);
 
-  for (const word of splitShellWords(command)) {
-    for (const candidate of pathCandidates(word)) {
-      const normalized = normalizeLocalPath(candidate);
-      if (synced.has(normalized) && !found.includes(normalized)) {
-        found.push(normalized);
+  for (const word of words) {
+    const texts = pathCandidates(word.text);
+    const patterns = pathCandidates(word.pattern);
+
+    texts.forEach((text, index) => {
+      const literalPath = normalizeLocalPath(text);
+      if (synced.has(literalPath)) {
+        found.add(literalPath);
       }
+
+      const pattern = normalizeLocalPath(patterns[index]);
+      if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
+        for (const syncedPath of synced) {
+          if (minimatch(syncedPath, pattern, SHELL_GLOB_OPTIONS)) {
+            found.add(syncedPath);
+          }
+        }
+      }
+    });
+  }
+
+  // Each nested string is shorter than the command it came from, so the
+  // recursion ends
+  for (const nested of nestedCommands(words)) {
+    for (const syncedPath of findSyncedPathReferences(nested, synced)) {
+      found.add(syncedPath);
     }
   }
 
-  return found;
+  return [...found];
 }
 
 /**

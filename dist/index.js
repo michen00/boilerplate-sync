@@ -33300,8 +33300,7 @@ function parseHooksInput(hooksYaml) {
   try {
     parsed = (0, import_yaml.parse)(hooksYaml);
   } catch (error2) {
-    const message = error2 instanceof Error ? error2.message : String(error2);
-    throw new ConfigError(`Failed to parse 'hooks' YAML: ${message}`);
+    throw new ConfigError(`Failed to parse 'hooks' YAML: ${error2.message}`);
   }
   if (parsed === null || parsed === void 0) {
     return void 0;
@@ -33329,15 +33328,35 @@ function parseHooksInput(hooksYaml) {
   };
 }
 var SHELL_SEPARATORS = /* @__PURE__ */ new Set([";", "|", "&", "<", ">", "(", ")"]);
-function splitShellWords(command) {
+var GLOB_CHARS = /* @__PURE__ */ new Set(["*", "?", "[", "]", "{", "}", "\\"]);
+var SHELL_GLOB_OPTIONS = {
+  dot: false,
+  noext: true,
+  nonegate: true,
+  nocomment: true,
+  matchBase: false,
+  magicalBraces: true,
+  platform: "linux"
+};
+var SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "dash", "zsh", "ksh", "ash"]);
+var SHELL_COMMAND_OPTION = /^-[A-Za-z]*c[A-Za-z]*$/;
+function splitShellTokens(command) {
   const words = [];
-  let current = "";
+  let text = "";
+  let pattern = "";
   let inWord = false;
+  let atCommandStart = true;
   let quote = null;
+  const literal2 = (ch) => {
+    text += ch;
+    pattern += GLOB_CHARS.has(ch) ? `\\${ch}` : ch;
+  };
   const endWord = () => {
     if (inWord) {
-      words.push(current);
-      current = "";
+      words.push({ text, pattern, startsCommand: atCommandStart });
+      atCommandStart = false;
+      text = "";
+      pattern = "";
       inWord = false;
     }
   };
@@ -33346,17 +33365,17 @@ function splitShellWords(command) {
     const next = command[i + 1];
     if (quote === "'") {
       if (ch === "'") quote = null;
-      else current += ch;
+      else literal2(ch);
       continue;
     }
     if (quote === '"') {
       if (ch === '"') {
         quote = null;
       } else if (ch === "\\" && next !== void 0 && '"\\$`'.includes(next)) {
-        current += next;
+        literal2(next);
         i++;
       } else {
-        current += ch;
+        literal2(ch);
       }
       continue;
     }
@@ -33367,14 +33386,18 @@ function splitShellWords(command) {
       if (next === "\n") {
         i++;
       } else if (next !== void 0) {
-        current += next;
+        literal2(next);
         inWord = true;
         i++;
       }
-    } else if (/\s/.test(ch) || SHELL_SEPARATORS.has(ch)) {
+    } else if (ch === "\n" || SHELL_SEPARATORS.has(ch)) {
+      endWord();
+      atCommandStart = true;
+    } else if (/\s/.test(ch)) {
       endWord();
     } else {
-      current += ch;
+      text += ch;
+      pattern += ch;
       inWord = true;
     }
   }
@@ -33389,17 +33412,64 @@ function pathCandidates(word) {
   }
   return value !== void 0 ? [word, value] : [word];
 }
-function findSyncedPathReferences(command, synced) {
-  const found = [];
-  for (const word of splitShellWords(command)) {
-    for (const candidate of pathCandidates(word)) {
-      const normalized = normalizeLocalPath(candidate);
-      if (synced.has(normalized) && !found.includes(normalized)) {
-        found.push(normalized);
+function nestedCommands(words) {
+  const nested = [];
+  let inShell = false;
+  let evalArgs;
+  const endCommand = () => {
+    if (evalArgs !== void 0 && evalArgs.length > 0) {
+      nested.push(evalArgs.join(" "));
+    }
+    inShell = false;
+    evalArgs = void 0;
+  };
+  words.forEach((word, index) => {
+    if (word.startsCommand) {
+      endCommand();
+    }
+    if (evalArgs !== void 0) {
+      evalArgs.push(word.text);
+    } else if (word.text === "eval") {
+      evalArgs = [];
+    } else if (SHELLS.has(path2.posix.basename(word.text))) {
+      inShell = true;
+    } else if (inShell && SHELL_COMMAND_OPTION.test(word.text)) {
+      const argument = words[index + 1];
+      if (argument !== void 0 && !argument.startsCommand) {
+        nested.push(argument.text);
       }
     }
+  });
+  endCommand();
+  return nested;
+}
+function findSyncedPathReferences(command, synced) {
+  const found = /* @__PURE__ */ new Set();
+  const words = splitShellTokens(command);
+  for (const word of words) {
+    const texts = pathCandidates(word.text);
+    const patterns = pathCandidates(word.pattern);
+    texts.forEach((text, index) => {
+      const literalPath = normalizeLocalPath(text);
+      if (synced.has(literalPath)) {
+        found.add(literalPath);
+      }
+      const pattern = normalizeLocalPath(patterns[index]);
+      if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
+        for (const syncedPath of synced) {
+          if (minimatch(syncedPath, pattern, SHELL_GLOB_OPTIONS)) {
+            found.add(syncedPath);
+          }
+        }
+      }
+    });
   }
-  return found;
+  for (const nested of nestedCommands(words)) {
+    for (const syncedPath of findSyncedPathReferences(nested, synced)) {
+      found.add(syncedPath);
+    }
+  }
+  return [...found];
 }
 function labelledHookCommands(hooks) {
   return [
@@ -33853,9 +33923,6 @@ async function expandGlobPatterns(configs, githubToken) {
 }
 async function syncFiles(inputs) {
   const { sources, githubToken, createMissing, failOnError, hooks } = inputs;
-  if (hooks && hooks.preSync.length > 0) {
-    await runHookCommands("pre-sync", hooks.preSync, {});
-  }
   const normalizedConfigs = normalizeSources(sources);
   const expandedConfigs = await expandGlobPatterns(normalizedConfigs, githubToken);
   let transforms = [];
@@ -33865,6 +33932,9 @@ async function syncFiles(inputs) {
       expandedConfigs.filter((config) => !isGlobPattern(config.local_path)).map((config) => config.local_path)
     );
     transforms = assignTransforms(expandedConfigs, hooks.transform);
+    if (hooks.preSync.length > 0) {
+      await runHookCommands("pre-sync", hooks.preSync, {});
+    }
   }
   const results = [];
   for (const [index, config] of expandedConfigs.entries()) {

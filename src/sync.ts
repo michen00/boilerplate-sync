@@ -231,18 +231,15 @@ async function expandGlobPatterns(
 export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
   const { sources, githubToken, createMissing, failOnError, hooks } = inputs;
 
-  // pre-sync runs before glob expansion, which already calls the GitHub API
-  if (hooks && hooks.preSync.length > 0) {
-    await runHookCommands('pre-sync', hooks.preSync, {});
-  }
-
   // Normalize sources into flat file configs
   const normalizedConfigs = normalizeSources(sources);
 
   // Expand any glob patterns
   const expandedConfigs = await expandGlobPatterns(normalizedConfigs, githubToken);
 
-  // Hook checks that need the expanded file list, before any content is fetched
+  // Check every hook against every synced path, glob-expanded ones included,
+  // before any hook runs: an earlier sync may have left a source-controlled
+  // copy of such a file in the workspace for pre-sync to run.
   let transforms: Array<TransformRule | undefined> = [];
   if (hooks) {
     checkHookReferences(
@@ -252,6 +249,11 @@ export async function syncFiles(inputs: ActionInputs): Promise<SyncSummary> {
         .map((config) => config.local_path)
     );
     transforms = assignTransforms(expandedConfigs, hooks.transform);
+
+    // pre-sync runs before any file content is fetched
+    if (hooks.preSync.length > 0) {
+      await runHookCommands('pre-sync', hooks.preSync, {});
+    }
   }
 
   const results: SyncResult[] = [];
