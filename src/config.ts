@@ -252,12 +252,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Normalise a local path for comparison: POSIX-normalised, with no leading
- * `./` and no trailing `/`
+ * Normalise a glob pattern for comparison: POSIX-normalised, with no
+ * leading `./` and no trailing `/`. Backslashes are kept, because in a glob
+ * a backslash escapes the next character.
+ */
+export function normalizeGlobPattern(pattern: string): string {
+  const normalized = path.posix.normalize(pattern.trim());
+  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
+}
+
+/**
+ * Normalise a local path for comparison. Unlike a glob pattern, a path
+ * treats a backslash as a Windows separator, so `scripts\merge.sh` written
+ * in a config or a quoted hook word matches `scripts/merge.sh`: on a
+ * Windows runner both name the same file.
  */
 export function normalizeLocalPath(localPath: string): string {
-  const normalized = path.posix.normalize(localPath.trim());
-  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
+  return normalizeGlobPattern(localPath.replace(/\\/g, '/'));
 }
 
 /**
@@ -302,7 +313,7 @@ function parseTransformRules(value: unknown): TransformRule[] {
       );
     }
 
-    const pattern = normalizeLocalPath(key);
+    const pattern = normalizeGlobPattern(key);
     if (seen.has(pattern)) {
       throw new ConfigError(
         `hooks.transform: duplicate key '${pattern}' after removing './'`
@@ -623,7 +634,7 @@ export function findSyncedPathReferences(
         found.add(literalPath);
       }
 
-      const pattern = normalizeLocalPath(patterns[index]);
+      const pattern = normalizeGlobPattern(patterns[index]);
       if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
         for (const syncedPath of synced) {
           if (minimatch(syncedPath, pattern, SHELL_GLOB_OPTIONS)) {
@@ -699,7 +710,7 @@ export function validateHooks(hooks: HooksConfig, sources: SourceConfig[]): void
   );
   const globs = configs
     .filter((config) => config.origin === 'default_files' && isGlobPattern(config.source_path))
-    .map((config) => normalizeLocalPath(config.source_path));
+    .map((config) => normalizeGlobPattern(config.source_path));
 
   for (const rule of hooks.transform) {
     if (isGlobPattern(rule.pattern)) {

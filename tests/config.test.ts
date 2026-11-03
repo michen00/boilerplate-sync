@@ -14,6 +14,7 @@ import {
   validateHooks,
   assignTransforms,
   checkHookReferences,
+  normalizeLocalPath,
 } from '../src/config';
 import type { HooksConfig, NormalizedFileSyncConfig } from '../src/sources/types';
 
@@ -1150,5 +1151,53 @@ describe('assignTransforms with concrete bracketed paths', () => {
     };
 
     expect(assignTransforms([expanded], [rule])).toEqual([rule]);
+  });
+});
+
+describe('Windows path separators', () => {
+  it('normalises backslashes in local paths, but not in glob patterns', () => {
+    expect(normalizeLocalPath('scripts\\merge.sh')).toBe('scripts/merge.sh');
+    expect(normalizeLocalPath('.\\scripts\\\\merge.sh')).toBe('scripts/merge.sh');
+  });
+
+  it('matches a synced path written with backslashes against a hook using slashes', () => {
+    const hooks: HooksConfig = { preSync: [], transform: [], postSync: ['bash scripts/merge.sh'] };
+
+    expect(() => checkHookReferences(hooks, ['scripts\\merge.sh'])).toThrow(
+      /hooks\.post-sync.*'scripts\/merge\.sh'/
+    );
+  });
+
+  it('matches a quoted backslash path in a hook against a synced path', () => {
+    expect(
+      findSyncedPathReferences("bash 'scripts\\merge.sh'", new Set(['scripts/merge.sh']))
+    ).toEqual(['scripts/merge.sh']);
+  });
+
+  it('rejects a hook naming a file_pairs path written with backslashes', () => {
+    const sources = parseSourcesInput(`
+      - source: org/repo
+        file_pairs:
+          - local_path: 'scripts\\merge.sh'
+    `);
+    const hooks: HooksConfig = { preSync: ['./scripts/merge.sh'], transform: [], postSync: [] };
+
+    expect(() => validateHooks(hooks, sources)).toThrow(/'scripts\/merge\.sh'/);
+  });
+
+  it('assigns a transform to a local path written with backslashes', () => {
+    const rule = { pattern: 'docs/a.md', command: 'cat' };
+    const config: NormalizedFileSyncConfig = {
+      local_path: 'docs\\a.md',
+      source_path: 'docs/a.md',
+      source: 'org/repo',
+      origin: 'file_pairs',
+    };
+
+    expect(assignTransforms([config], [rule])).toEqual([rule]);
+  });
+
+  it('keeps backslash escapes in glob patterns', () => {
+    expect(findSyncedPathReferences('bash scripts/merge\\*.sh', new Set(['scripts/merge.sh']))).toEqual([]);
   });
 });

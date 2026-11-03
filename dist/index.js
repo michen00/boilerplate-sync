@@ -33245,9 +33245,12 @@ var GLOB_OPTIONS = { matchBase: false };
 function isPlainObject3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function normalizeLocalPath(localPath) {
-  const normalized = path2.posix.normalize(localPath.trim());
+function normalizeGlobPattern(pattern) {
+  const normalized = path2.posix.normalize(pattern.trim());
   return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized;
+}
+function normalizeLocalPath(localPath) {
+  return normalizeGlobPattern(localPath.replace(/\\/g, "/"));
 }
 function parseHookCommands(value, key) {
   const commands = typeof value === "string" ? [value] : value;
@@ -33281,7 +33284,7 @@ function parseTransformRules(value) {
         `hooks.transform['${key}']: must be a non-empty command string`
       );
     }
-    const pattern = normalizeLocalPath(key);
+    const pattern = normalizeGlobPattern(key);
     if (seen.has(pattern)) {
       throw new ConfigError(
         `hooks.transform: duplicate key '${pattern}' after removing './'`
@@ -33497,7 +33500,7 @@ function findSyncedPathReferences(command, synced) {
       if (synced.has(literalPath)) {
         found.add(literalPath);
       }
-      const pattern = normalizeLocalPath(patterns[index]);
+      const pattern = normalizeGlobPattern(patterns[index]);
       if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
         for (const syncedPath of synced) {
           if (minimatch(syncedPath, pattern, SHELL_GLOB_OPTIONS)) {
@@ -33540,7 +33543,7 @@ function validateHooks(hooks, sources) {
   const literalPaths = new Set(
     configs.filter((config) => !isGlobPattern(config.source_path)).map((config) => normalizeLocalPath(config.local_path))
   );
-  const globs = configs.filter((config) => config.origin === "default_files" && isGlobPattern(config.source_path)).map((config) => normalizeLocalPath(config.source_path));
+  const globs = configs.filter((config) => config.origin === "default_files" && isGlobPattern(config.source_path)).map((config) => normalizeGlobPattern(config.source_path));
   for (const rule of hooks.transform) {
     if (isGlobPattern(rule.pattern)) {
       continue;
