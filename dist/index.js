@@ -34054,6 +34054,36 @@ async function runPostSync(inputs, summary2) {
 }
 
 // src/report.ts
+function publicConfig(config) {
+  return {
+    local_path: config.local_path,
+    source_path: config.source_path,
+    source: config.source,
+    ref: config.ref,
+    origin: config.origin,
+    expandedFrom: config.expandedFrom
+  };
+}
+function publicResult(result) {
+  return {
+    config: publicConfig(result.config),
+    status: result.status,
+    error: result.error,
+    resolvedRef: result.resolvedRef,
+    isNew: result.isNew
+  };
+}
+function serializeSummary(summary2) {
+  return JSON.stringify({
+    updated: summary2.updated.map(publicResult),
+    created: summary2.created.map(publicResult),
+    skipped: summary2.skipped.map(publicResult),
+    failed: summary2.failed.map(publicResult),
+    total: summary2.total,
+    hasChanges: summary2.hasChanges,
+    allFailed: summary2.allFailed
+  });
+}
 function generateStepSummary(summary2) {
   const lines = [];
   lines.push("# Boilerplate Sync Results");
@@ -34082,7 +34112,7 @@ function setOutputs(outputs) {
   setOutput("updated-count", outputs.updatedCount.toString());
   setOutput("failed-count", outputs.failedCount.toString());
   setOutput("skipped-count", outputs.skippedCount.toString());
-  setOutput("summary", JSON.stringify(outputs.summary));
+  setOutput("summary", serializeSummary(outputs.summary));
 }
 function buildOutputs(summary2) {
   return {
