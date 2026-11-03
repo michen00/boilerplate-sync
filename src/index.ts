@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import { getInputs, logConfig, ConfigError } from './config';
 import { syncFiles } from './sync';
-import { generateStepSummary } from './report';
+import { generateStepSummary, serializeSummary } from './report';
 import type { ActionOutputs, SyncSummary } from './sources/types';
 
 /**
@@ -12,7 +12,7 @@ function setOutputs(outputs: ActionOutputs): void {
   core.setOutput('updated-count', outputs.updatedCount.toString());
   core.setOutput('failed-count', outputs.failedCount.toString());
   core.setOutput('skipped-count', outputs.skippedCount.toString());
-  core.setOutput('summary', JSON.stringify(outputs.summary));
+  core.setOutput('summary', serializeSummary(outputs.summary));
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateStepSummary } from '../src/report';
+import { generateStepSummary, serializeSummary } from '../src/report';
 import type { SyncSummary, SyncResult, NormalizedFileSyncConfig } from '../src/sources/types';
 
 function createConfig(overrides: Partial<NormalizedFileSyncConfig> = {}): NormalizedFileSyncConfig {
@@ -7,6 +7,7 @@ function createConfig(overrides: Partial<NormalizedFileSyncConfig> = {}): Normal
     local_path: '.eslintrc.js',
     source_path: '.eslintrc.js',
     source: 'my-org/boilerplate',
+    origin: 'default_files',
     ...overrides,
   };
 }
@@ -90,5 +91,93 @@ describe('generateStepSummary', () => {
     const stepSummary = generateStepSummary(summary);
 
     expect(stepSummary).toContain('ℹ️ No changes detected');
+  });
+});
+
+describe('serializeSummary', () => {
+  const withToken = (status: 'updated' | 'created' | 'skipped' | 'failed'): SyncResult =>
+    createResult(status, {
+      config: createConfig({ sourceToken: 'ghp_secret_token' }),
+    });
+
+  it('omits source tokens from every result', () => {
+    const json = serializeSummary(
+      createSummary({
+        updated: [withToken('updated')],
+        created: [withToken('created')],
+        skipped: [withToken('skipped')],
+        failed: [withToken('failed')],
+        total: 4,
+        hasChanges: true,
+      })
+    );
+
+    expect(json).not.toContain('ghp_secret_token');
+    expect(json).not.toContain('sourceToken');
+  });
+
+  it('keeps every other field of the summary', () => {
+    const result = createResult('updated', {
+      config: createConfig({
+        local_path: 'docs/a.md',
+        source_path: 'docs/a.md',
+        ref: 'v2',
+        sourceToken: 'ghp_secret_token',
+        origin: 'default_files',
+        expandedFrom: 'docs/*.md',
+      }),
+      resolvedRef: 'v2',
+      isNew: false,
+    });
+    const failed = createResult('failed', { error: 'Not Found', resolvedRef: undefined });
+
+    const parsed: unknown = JSON.parse(
+      serializeSummary(
+        createSummary({ updated: [result], failed: [failed], total: 2, hasChanges: true })
+      )
+    );
+
+    expect(parsed).toEqual({
+      updated: [
+        {
+          config: {
+            local_path: 'docs/a.md',
+            source_path: 'docs/a.md',
+            source: 'my-org/boilerplate',
+            ref: 'v2',
+            origin: 'default_files',
+            expandedFrom: 'docs/*.md',
+          },
+          status: 'updated',
+          resolvedRef: 'v2',
+          isNew: false,
+        },
+      ],
+      created: [],
+      skipped: [],
+      failed: [
+        {
+          config: {
+            local_path: '.eslintrc.js',
+            source_path: '.eslintrc.js',
+            source: 'my-org/boilerplate',
+            origin: 'default_files',
+          },
+          status: 'failed',
+          error: 'Not Found',
+        },
+      ],
+      total: 2,
+      hasChanges: true,
+      allFailed: false,
+    });
+  });
+
+  it('leaves out config fields that are not on its allowlist', () => {
+    const config = { ...createConfig(), futureSecret: 'hunter2' } as NormalizedFileSyncConfig;
+
+    const json = serializeSummary(createSummary({ skipped: [createResult('skipped', { config })] }));
+
+    expect(json).not.toContain('hunter2');
   });
 });
