@@ -254,6 +254,17 @@ describe.skipIf(!hasBash)('hook processes (real bash)', () => {
       expect(!result.ok && result.error).toMatch(/: line 3\nline 4\nline 5\nline 6\nline 7$/);
     });
 
+    it('strips a trailing carriage return from a final unterminated line', async () => {
+      const result = await runTransform(rule("printf 'progress\\r' >&2; exit 2"), 'x', {});
+
+      expect(result).toEqual({
+        ok: false,
+        error: "transform 'package.json' exited with code 2: progress",
+      });
+      const logged = vi.mocked(core.info).mock.calls.map((call) => String(call[0]));
+      expect(logged).toContain('  | progress');
+    });
+
     it('includes stderr that does not end in a newline', async () => {
       const result = await runTransform(rule("printf 'no newline' >&2; exit 2"), 'x', {});
 

@@ -33723,7 +33723,7 @@ function lineReader(onLine) {
     end() {
       pending += decoder.end();
       if (pending) {
-        onLine(pending);
+        onLine(pending.replace(/\r$/, ""));
       }
       pending = "";
     }

@@ -147,7 +147,8 @@ function lineReader(onLine: (line: string) => void): {
     end(): void {
       pending += decoder.end();
       if (pending) {
-        onLine(pending);
+        // Trim a trailing CR the same way write() does for complete lines
+        onLine(pending.replace(/\r$/, ''));
       }
       pending = '';
     },
