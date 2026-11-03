@@ -104,6 +104,20 @@ describe('resolveBash', () => {
     ).toBe('D:\\tools\\msys\\bash.exe');
   });
 
+  it('falls back to the default Program Files and to PATH on Windows', () => {
+    expect(
+      resolveBash('win32', {}, (candidate) => candidate === 'C:\\Program Files\\Git\\bin\\bash.exe')
+    ).toBe('C:\\Program Files\\Git\\bin\\bash.exe');
+    expect(
+      resolveBash(
+        'win32',
+        { PATH: 'E:\\empty;;F:\\bin' },
+        (candidate) => candidate === 'F:\\bin\\bash.exe'
+      )
+    ).toBe('F:\\bin\\bash.exe');
+    expect(resolveBash('win32', {}, () => false)).toBeUndefined();
+  });
+
   it('returns undefined on Windows when only the WSL launcher exists', () => {
     const exists = (candidate: string) => candidate === 'C:\\Windows\\System32\\bash.exe';
 
@@ -240,6 +254,15 @@ describe.skipIf(!hasBash)('hook processes (real bash)', () => {
       expect(!result.ok && result.error).toMatch(/: line 3\nline 4\nline 5\nline 6\nline 7$/);
     });
 
+    it('includes stderr that does not end in a newline', async () => {
+      const result = await runTransform(rule("printf 'no newline' >&2; exit 2"), 'x', {});
+
+      expect(result).toEqual({
+        ok: false,
+        error: "transform 'package.json' exited with code 2: no newline",
+      });
+    });
+
     it('logs stderr but never the content on stdout', async () => {
       await runTransform(rule('echo progress >&2; echo secret-content'), 'x', {});
 
@@ -286,11 +309,12 @@ describe.skipIf(!hasBash)('hook processes (real bash)', () => {
     it('logs stdout and stderr', async () => {
       await runHookCommands(
         'post-sync',
-        ["echo formatted; echo warned >&2; printf 'no newline'"],
+        ["echo formatted; echo warned >&2; printf 'crlf\\r\\nno newline'"],
         {}
       );
 
       const logged = vi.mocked(core.info).mock.calls.map((call) => String(call[0]));
+      expect(logged).toContain('crlf');
       expect(logged).toContain('formatted');
       expect(logged).toContain('warned');
       expect(logged).toContain('no newline');

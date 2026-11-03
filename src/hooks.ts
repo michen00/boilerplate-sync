@@ -117,9 +117,9 @@ interface BashResult {
  * How a finished process ended, for error messages
  */
 function describeExit(result: BashResult): string {
-  return result.exitCode !== null
-    ? `exited with code ${result.exitCode}`
-    : `was stopped by ${result.signal ?? 'a signal'}`;
+  return result.signal !== null
+    ? `was stopped by ${result.signal}`
+    : `exited with code ${result.exitCode}`;
 }
 
 /**
@@ -136,10 +136,12 @@ function lineReader(onLine: (line: string) => void): {
   return {
     write(chunk: Buffer): void {
       pending += decoder.write(chunk);
-      const lines = pending.split(/\r?\n/);
-      pending = lines.pop() ?? '';
-      for (const line of lines) {
-        onLine(line);
+      const lastNewline = pending.lastIndexOf('\n');
+      if (lastNewline >= 0) {
+        for (const line of pending.slice(0, lastNewline).split('\n')) {
+          onLine(line.replace(/\r$/, ''));
+        }
+        pending = pending.slice(lastNewline + 1);
       }
     },
     end(): void {
@@ -194,13 +196,11 @@ function spawnBash(
     });
 
     if (input !== undefined && child.stdin) {
-      child.stdin.on('error', (error: NodeJS.ErrnoException) => {
-        // A hook may finish without reading all of its input, as
-        // `cat overrides.json` does; the write then meets a closed pipe.
-        if (error.code !== 'EPIPE') {
-          reject(error);
-        }
-      });
+      // A hook may finish without reading all of its input, as
+      // `cat overrides.json` does, and the write then meets a closed pipe
+      // (EPIPE, or ECONNRESET on Windows). That is not a failure: the exit
+      // status and the output decide the result.
+      child.stdin.on('error', () => undefined);
       child.stdin.end(input);
     }
   });
@@ -273,8 +273,10 @@ export async function runHookCommands(
     try {
       result = await runBash(hook, command, context, undefined, true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new HookError(`${hook} command ${position} could not start: ${message}`);
+      // runBash only throws Error: from fs, from spawn, or for a missing bash
+      throw new HookError(
+        `${hook} command ${position} could not start: ${(error as Error).message}`
+      );
     }
 
     if (result.exitCode !== 0) {
@@ -296,8 +298,11 @@ export async function runTransform(
   try {
     result = await runBash('transform', rule.command, context, Buffer.from(content, 'utf-8'), false);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: `transform '${rule.pattern}' could not start: ${message}` };
+    // runBash only throws Error: from fs, from spawn, or for a missing bash
+    return {
+      ok: false,
+      error: `transform '${rule.pattern}' could not start: ${(error as Error).message}`,
+    };
   }
 
   if (result.exitCode !== 0) {

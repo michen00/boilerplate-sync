@@ -33658,7 +33658,7 @@ function resolveBash(platform2 = process.platform, env = process.env, exists2 = 
   return void 0;
 }
 function describeExit(result) {
-  return result.exitCode !== null ? `exited with code ${result.exitCode}` : `was stopped by ${result.signal ?? "a signal"}`;
+  return result.signal !== null ? `was stopped by ${result.signal}` : `exited with code ${result.exitCode}`;
 }
 function lineReader(onLine) {
   const decoder = new import_string_decoder.StringDecoder("utf8");
@@ -33666,10 +33666,12 @@ function lineReader(onLine) {
   return {
     write(chunk) {
       pending += decoder.write(chunk);
-      const lines = pending.split(/\r?\n/);
-      pending = lines.pop() ?? "";
-      for (const line of lines) {
-        onLine(line);
+      const lastNewline = pending.lastIndexOf("\n");
+      if (lastNewline >= 0) {
+        for (const line of pending.slice(0, lastNewline).split("\n")) {
+          onLine(line.replace(/\r$/, ""));
+        }
+        pending = pending.slice(lastNewline + 1);
       }
     },
     end() {
@@ -33704,11 +33706,7 @@ function spawnBash(bash, script, env, input, onStdoutLine, onStderrLine) {
       resolve({ exitCode, signal, stdout: Buffer.concat(stdoutChunks).toString("utf-8") });
     });
     if (input !== void 0 && child.stdin) {
-      child.stdin.on("error", (error2) => {
-        if (error2.code !== "EPIPE") {
-          reject(error2);
-        }
-      });
+      child.stdin.on("error", () => void 0);
       child.stdin.end(input);
     }
   });
@@ -33754,8 +33752,9 @@ async function runHookCommands(hook2, commands, context) {
     try {
       result = await runBash(hook2, command, context, void 0, true);
     } catch (error2) {
-      const message = error2 instanceof Error ? error2.message : String(error2);
-      throw new HookError(`${hook2} command ${position} could not start: ${message}`);
+      throw new HookError(
+        `${hook2} command ${position} could not start: ${error2.message}`
+      );
     }
     if (result.exitCode !== 0) {
       throw new HookError(`${hook2} command ${position} ${describeExit(result)}: ${command}`);
@@ -33767,8 +33766,10 @@ async function runTransform(rule, content, context) {
   try {
     result = await runBash("transform", rule.command, context, Buffer.from(content, "utf-8"), false);
   } catch (error2) {
-    const message = error2 instanceof Error ? error2.message : String(error2);
-    return { ok: false, error: `transform '${rule.pattern}' could not start: ${message}` };
+    return {
+      ok: false,
+      error: `transform '${rule.pattern}' could not start: ${error2.message}`
+    };
   }
   if (result.exitCode !== 0) {
     const tail = result.stderrTail.join("\n");
