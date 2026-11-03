@@ -7,6 +7,7 @@ function createConfig(overrides: Partial<NormalizedFileSyncConfig> = {}): Normal
     local_path: '.eslintrc.js',
     source_path: '.eslintrc.js',
     source: 'my-org/boilerplate',
+    origin: 'default_files',
     ...overrides,
   };
 }
@@ -96,7 +97,7 @@ describe('generateStepSummary', () => {
 describe('serializeSummary', () => {
   const withToken = (status: 'updated' | 'created' | 'skipped' | 'failed'): SyncResult =>
     createResult(status, {
-      config: createConfig({ sourceToken: 'ghp_secret_token', origin: 'default_files' }),
+      config: createConfig({ sourceToken: 'ghp_secret_token' }),
     });
 
   it('omits source tokens from every result', () => {
@@ -160,6 +161,7 @@ describe('serializeSummary', () => {
             local_path: '.eslintrc.js',
             source_path: '.eslintrc.js',
             source: 'my-org/boilerplate',
+            origin: 'default_files',
           },
           status: 'failed',
           error: 'Not Found',
