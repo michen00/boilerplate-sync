@@ -38,7 +38,8 @@ inputs:
         - transform: (optional) map of local path or glob to a command that reads the fetched
           content on stdin and prints the content to keep; runs before the unchanged check
         - post-sync: (optional) command or list of commands, run once after all files are processed
-      Hooks never receive this action's inputs or tokens, and may not name a synced path.
+      Hook processes get none of this action's inputs or tokens in their environment, and may not
+      name a synced path. Check out with persist-credentials: false when you use hooks.
       See the README's Hooks section.
     required: false
     default: ''
