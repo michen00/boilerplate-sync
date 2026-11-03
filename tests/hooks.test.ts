@@ -184,6 +184,22 @@ describe.skipIf(!hasBash)('hook processes (real bash)', () => {
       );
     });
 
+    it('survives a transform that exits without reading its input', async () => {
+      // 1 MiB overflows the pipe buffer, so the write meets a closed pipe (EPIPE)
+      const result = await runTransform(rule('echo replaced'), 'x'.repeat(1024 * 1024), {});
+
+      expect(result).toEqual({ ok: true, content: 'replaced\n' });
+    });
+
+    it('reports a transform stopped by a signal', async () => {
+      const result = await runTransform(rule('kill -KILL $$'), 'x', {});
+
+      expect(result).toEqual({
+        ok: false,
+        error: "transform 'package.json' was stopped by SIGKILL",
+      });
+    });
+
     it('fails a pipeline whose first command fails', async () => {
       const result = await runTransform(rule('false | cat'), 'x', {});
 
@@ -268,11 +284,16 @@ describe.skipIf(!hasBash)('hook processes (real bash)', () => {
     });
 
     it('logs stdout and stderr', async () => {
-      await runHookCommands('post-sync', ['echo formatted; echo warned >&2'], {});
+      await runHookCommands(
+        'post-sync',
+        ["echo formatted; echo warned >&2; printf 'no newline'"],
+        {}
+      );
 
       const logged = vi.mocked(core.info).mock.calls.map((call) => String(call[0]));
       expect(logged).toContain('formatted');
       expect(logged).toContain('warned');
+      expect(logged).toContain('no newline');
     });
 
     it('throws HookError when bash cannot start', async () => {

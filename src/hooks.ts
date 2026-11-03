@@ -1,9 +1,10 @@
 import * as core from '@actions/core';
-import * as exec from '@actions/exec';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
+import { StringDecoder } from 'string_decoder';
 import type { TransformRule } from './sources/types';
 
 /**
@@ -105,9 +106,104 @@ export function resolveBash(
 }
 
 interface BashResult {
-  exitCode: number;
+  /** Exit code, or null when a signal ended the process */
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
   stdout: string;
   stderrTail: string[];
+}
+
+/**
+ * How a finished process ended, for error messages
+ */
+function describeExit(result: BashResult): string {
+  return result.exitCode !== null
+    ? `exited with code ${result.exitCode}`
+    : `was stopped by ${result.signal ?? 'a signal'}`;
+}
+
+/**
+ * Call onLine for each complete line of a byte stream, decoding UTF-8
+ * characters that are split across chunks
+ */
+function lineReader(onLine: (line: string) => void): {
+  write: (chunk: Buffer) => void;
+  end: () => void;
+} {
+  const decoder = new StringDecoder('utf8');
+  let pending = '';
+
+  return {
+    write(chunk: Buffer): void {
+      pending += decoder.write(chunk);
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop() ?? '';
+      for (const line of lines) {
+        onLine(line);
+      }
+    },
+    end(): void {
+      pending += decoder.end();
+      if (pending) {
+        onLine(pending);
+      }
+      pending = '';
+    },
+  };
+}
+
+/**
+ * Spawn bash on a script and wait for it to close. With `input`, stdin is a
+ * pipe that receives it, and a process that exits without reading all of
+ * it is not an error. Without `input`, stdin is the null device, so a
+ * command that reads stdin sees end-of-file at once.
+ */
+function spawnBash(
+  bash: string,
+  script: string,
+  env: Record<string, string>,
+  input: Buffer | undefined,
+  onStdoutLine: ((line: string) => void) | undefined,
+  onStderrLine: (line: string) => void
+): Promise<Omit<BashResult, 'stderrTail'>> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(bash, [...BASH_FLAGS, script], {
+      cwd: process.cwd(),
+      env,
+      stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    const stdoutChunks: Buffer[] = [];
+    const stdoutLines = onStdoutLine ? lineReader(onStdoutLine) : undefined;
+    const stderrLines = lineReader(onStderrLine);
+
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdoutChunks.push(chunk);
+      stdoutLines?.write(chunk);
+    });
+    child.stderr?.on('data', (chunk: Buffer) => stderrLines.write(chunk));
+
+    // Fires when the process cannot start, such as ENOENT for a missing bash
+    child.on('error', reject);
+
+    child.on('close', (exitCode, signal) => {
+      stdoutLines?.end();
+      stderrLines.end();
+      resolve({ exitCode, signal, stdout: Buffer.concat(stdoutChunks).toString('utf-8') });
+    });
+
+    if (input !== undefined && child.stdin) {
+      child.stdin.on('error', (error: NodeJS.ErrnoException) => {
+        // A hook may finish without reading all of its input, as
+        // `cat overrides.json` does; the write then meets a closed pipe.
+        if (error.code !== 'EPIPE') {
+          reject(error);
+        }
+      });
+      child.stdin.end(input);
+    }
+  });
 }
 
 /**
@@ -120,7 +216,7 @@ async function runBash(
   hook: HookName,
   command: string,
   context: Record<string, string>,
-  input: Buffer,
+  input: Buffer | undefined,
   logStdout: boolean
 ): Promise<BashResult> {
   const bash = resolveBash();
@@ -139,35 +235,30 @@ async function runBash(
   try {
     await fsp.writeFile(script, `${command}\n`, 'utf-8');
 
-    // exec splits its first argument on spaces, so quote the bash path
-    // (C:\Program Files\Git\bin\bash.exe)
-    const output = await exec.getExecOutput(`"${bash}"`, [...BASH_FLAGS, script], {
-      cwd: process.cwd(),
+    const result = await spawnBash(
+      bash,
+      script,
       env,
       input,
-      silent: true,
-      ignoreReturnCode: true,
-      listeners: {
-        stdline: logStdout ? (line: string) => core.info(`${prefix}${line}`) : undefined,
-        errline: (line: string) => {
-          core.info(`${prefix}${line}`);
-          stderrTail.push(line);
-          if (stderrTail.length > STDERR_TAIL_LINES) {
-            stderrTail.shift();
-          }
-        },
-      },
-    });
+      logStdout ? (line) => core.info(`${prefix}${line}`) : undefined,
+      (line) => {
+        core.info(`${prefix}${line}`);
+        stderrTail.push(line);
+        if (stderrTail.length > STDERR_TAIL_LINES) {
+          stderrTail.shift();
+        }
+      }
+    );
 
-    return { exitCode: output.exitCode, stdout: output.stdout, stderrTail };
+    return { ...result, stderrTail };
   } finally {
     await fsp.rm(scriptDir, { recursive: true, force: true });
   }
 }
 
 /**
- * Run a pre-sync or post-sync hook: each command in order, with stdin
- * closed, stopping at the first failure. Throws HookError on failure.
+ * Run a pre-sync or post-sync hook: each command in order, with an empty
+ * stdin, stopping at the first failure. Throws HookError on failure.
  */
 export async function runHookCommands(
   hook: 'pre-sync' | 'post-sync',
@@ -180,16 +271,14 @@ export async function runHookCommands(
 
     let result: BashResult;
     try {
-      result = await runBash(hook, command, context, Buffer.alloc(0), true);
+      result = await runBash(hook, command, context, undefined, true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new HookError(`${hook} command ${position} could not start: ${message}`);
     }
 
     if (result.exitCode !== 0) {
-      throw new HookError(
-        `${hook} command ${position} exited with code ${result.exitCode}: ${command}`
-      );
+      throw new HookError(`${hook} command ${position} ${describeExit(result)}: ${command}`);
     }
   }
 }
@@ -215,7 +304,7 @@ export async function runTransform(
     const tail = result.stderrTail.join('\n');
     return {
       ok: false,
-      error: `transform '${rule.pattern}' exited with code ${result.exitCode}${tail ? `: ${tail}` : ''}`,
+      error: `transform '${rule.pattern}' ${describeExit(result)}${tail ? `: ${tail}` : ''}`,
     };
   }
 

@@ -204,7 +204,7 @@ hooks: |
 | `transform` | A map of local path or glob to one command | For each matching file, after the file is fetched and before it is compared with the local file |
 | `post-sync` | A command, or a list of commands | Once, after every file has been processed |
 
-Each command runs in bash from the workspace root, the way a `run:` step with `shell: bash` runs it: `bash --noprofile --norc -e -o pipefail`. On Windows the action uses Git for Windows bash, which GitHub-hosted runners include. A list runs in order and stops at the first command that fails. Quote a key that starts with `*`, as in `'*.md'`, because YAML reads a bare `*` as an alias.
+Each command runs in bash from the workspace root, the way a `run:` step with `shell: bash` runs it: `bash --noprofile --norc -e -o pipefail`. On Windows the action uses Git for Windows bash, which GitHub-hosted runners include. `pre-sync` and `post-sync` get an empty stdin. A list runs in order and stops at the first command that fails. Quote a key that starts with `*`, as in `'*.md'`, because YAML reads a bare `*` as an alias.
 
 #### Transforms
 
