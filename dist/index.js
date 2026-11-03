@@ -33341,6 +33341,7 @@ var SHELL_GLOB_OPTIONS = {
   magicalBraces: true,
   platform: "linux"
 };
+var SHELL_GLOB_MATCH_OPTIONS = { ...SHELL_GLOB_OPTIONS, nocase: true };
 var SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "dash", "zsh", "ksh", "ash"]);
 var SHELL_COMMAND_OPTION = /^-[A-Za-z]*c[A-Za-z]*$/;
 function closingParen(command, start) {
@@ -33492,19 +33493,23 @@ function findSyncedPathReferences(command, synced) {
   const found = /* @__PURE__ */ new Set();
   const substitutions = [];
   const words = splitShellTokens(command, substitutions);
+  const syncedByLowerCase = new Map(
+    Array.from(synced, (syncedPath) => [syncedPath.toLowerCase(), syncedPath])
+  );
   for (const word of words) {
     const texts = pathCandidates(word.text);
     const patterns = pathCandidates(word.pattern);
     texts.forEach((text, index) => {
       for (const literalPath of [normalizeLocalPath(text), normalizeGlobPattern(text)]) {
-        if (synced.has(literalPath)) {
-          found.add(literalPath);
+        const syncedPath = syncedByLowerCase.get(literalPath.toLowerCase());
+        if (syncedPath !== void 0) {
+          found.add(syncedPath);
         }
       }
       const pattern = normalizeGlobPattern(patterns[index]);
       if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
         for (const syncedPath of synced) {
-          if (minimatch(syncedPath, pattern, SHELL_GLOB_OPTIONS)) {
+          if (minimatch(syncedPath, pattern, SHELL_GLOB_MATCH_OPTIONS)) {
             found.add(syncedPath);
           }
         }

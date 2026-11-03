@@ -392,6 +392,15 @@ const SHELL_GLOB_OPTIONS = {
   platform: 'linux',
 } as const;
 
+/**
+ * Matching options for a hook word's glob against synced paths. Case is
+ * ignored because the filesystems of Windows and default macOS runners are
+ * case-insensitive, so `SCRIPTS/*.sh` reaches `scripts/merge.sh` there.
+ * Kept apart from SHELL_GLOB_OPTIONS because with `nocase` minimatch treats
+ * any word with letters as magic.
+ */
+const SHELL_GLOB_MATCH_OPTIONS = { ...SHELL_GLOB_OPTIONS, nocase: true } as const;
+
 /** Interpreters whose `-c` argument is itself a shell command */
 const SHELLS = new Set(['bash', 'sh', 'dash', 'zsh', 'ksh', 'ash']);
 
@@ -624,6 +633,12 @@ export function findSyncedPathReferences(
   const found = new Set<string>();
   const substitutions: string[] = [];
   const words = splitShellTokens(command, substitutions);
+  // Compare ignoring case: a case-insensitive filesystem (Windows, default
+  // macOS) opens scripts/merge.sh for SCRIPTS/merge.sh. Report the synced
+  // path as configured.
+  const syncedByLowerCase = new Map(
+    Array.from(synced, (syncedPath) => [syncedPath.toLowerCase(), syncedPath] as const)
+  );
 
   for (const word of words) {
     const texts = pathCandidates(word.text);
@@ -631,15 +646,16 @@ export function findSyncedPathReferences(
 
     texts.forEach((text, index) => {
       for (const literalPath of [normalizeLocalPath(text), normalizeGlobPattern(text)]) {
-        if (synced.has(literalPath)) {
-          found.add(literalPath);
+        const syncedPath = syncedByLowerCase.get(literalPath.toLowerCase());
+        if (syncedPath !== undefined) {
+          found.add(syncedPath);
         }
       }
 
       const pattern = normalizeGlobPattern(patterns[index]);
       if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
         for (const syncedPath of synced) {
-          if (minimatch(syncedPath, pattern, SHELL_GLOB_OPTIONS)) {
+          if (minimatch(syncedPath, pattern, SHELL_GLOB_MATCH_OPTIONS)) {
             found.add(syncedPath);
           }
         }

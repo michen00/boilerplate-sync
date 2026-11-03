@@ -1218,3 +1218,25 @@ describe('Windows path separators', () => {
     expect(findSyncedPathReferences('bash scripts/merge\\*.sh', new Set(['scripts/merge.sh']))).toEqual([]);
   });
 });
+
+describe('case-insensitive synced-path matching', () => {
+  const synced = new Set(['scripts/merge.sh']);
+  const find = (command: string) => findSyncedPathReferences(command, synced);
+
+  it('matches a synced path named with different case, as on Windows and macOS', () => {
+    expect(find('bash SCRIPTS/merge.sh')).toEqual(['scripts/merge.sh']);
+    expect(find('./Scripts/Merge.SH')).toEqual(['scripts/merge.sh']);
+  });
+
+  it('matches a differently cased glob', () => {
+    expect(find('bash Scripts/M*.sh')).toEqual(['scripts/merge.sh']);
+  });
+
+  it('rejects a differently cased hook through checkHookReferences', () => {
+    const hooks: HooksConfig = { preSync: ['bash SCRIPTS\\\\MERGE.sh'], transform: [], postSync: [] };
+
+    expect(() => checkHookReferences(hooks, ['scripts/merge.sh'])).toThrow(
+      /hooks\.pre-sync.*'scripts\/merge\.sh'/
+    );
+  });
+});
