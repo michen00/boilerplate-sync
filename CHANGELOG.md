@@ -6,6 +6,18 @@ All notable changes will be documented in this file. See [conventional commits](
 
 The format is based on [Keep a Changelog](https://keepachangelog.com) and this project adheres to [Semantic Versioning](https://semver.org).
 
+## [1.1.0](https://github.com/michen00/boilerplate-sync/compare/v1.0.5...v1.1.0) (2026-11-04)
+
+
+### Features
+
+* add lifecycle hooks ([#232](https://github.com/michen00/boilerplate-sync/issues/232)) ([74cbb05](https://github.com/michen00/boilerplate-sync/commit/74cbb050bb3cda8084df332f1ab6e83d1bf05f64))
+
+
+### Bug Fixes
+
+* keep source tokens out of summary output ([#231](https://github.com/michen00/boilerplate-sync/issues/231)) ([5d69d4e](https://github.com/michen00/boilerplate-sync/commit/5d69d4e4b61327c3bfc598800262968dbc18545f))
+
 ## [1.0.5](https://github.com/michen00/boilerplate-sync/compare/v1.0.4...v1.0.5) (2026-08-05)
 
 
