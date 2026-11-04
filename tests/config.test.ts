@@ -1336,6 +1336,24 @@ describe('ANSI-C and locale quoting', () => {
     expect(find("bash $'scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
     expect(find('bash $"scripts/merge.sh"')).toEqual(['scripts/merge.sh']);
     expect(splitShellWords("echo $'don\\'t'")).toEqual(['echo', "don't"]);
+    expect(splitShellWords(String.raw`printf '%s' $'a\tb\nc\\d'`)).toEqual([
+      'printf', '%s', 'a\tb\nc\\d',
+    ]);
+  });
+
+  it('rejects ANSI-C escapes it cannot safely interpret', () => {
+    for (const command of [
+      String.raw`bash $'scripts/\x6derge.sh'`,
+      String.raw`bash $'scripts/\155erge.sh'`,
+      String.raw`bash $'scripts/\u006derge.sh'`,
+      String.raw`bash $'scripts/\U0000006derge.sh'`,
+      String.raw`bash $'scripts/merge.sh\0ignored'`,
+      String.raw`bash $'scripts/merge\c?.sh'`,
+    ]) {
+      expect(() => checkHookReferences(
+        { ...noHooks(), postSync: [command] }, ['scripts/merge.sh']
+      )).toThrow(/hooks\.post-sync:.*unsupported ANSI-C escape/);
+    }
   });
 
   it("does not let an escaped quote in $'...' hide the rest of the command", () => {
@@ -1351,6 +1369,12 @@ describe('ANSI-C and locale quoting', () => {
 describe('the command string of a nested shell', () => {
   const synced = new Set(['scripts/merge.sh']);
   const find = (command: string) => findSyncedPathReferences(command, synced);
+
+  it('checks +c and option bundles that bash also treats as command strings', () => {
+    expect(find("bash +c 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash +ec 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+    expect(find("bash +c -- 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);
+  });
 
   it('is found after further options, -- and redirections following -c', () => {
     expect(find("bash -c -- 'bash scripts/merge.sh'")).toEqual(['scripts/merge.sh']);

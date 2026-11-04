@@ -379,6 +379,23 @@ const SHELL_SEPARATORS = new Set([';', '|', '&', '(', ')']);
 /** Characters that are glob or brace syntax to bash when unquoted */
 const GLOB_CHARS = new Set(['*', '?', '[', ']', '{', '}', '\\']);
 
+/** ANSI-C escapes whose literal value the synced-path check can safely read */
+const ANSI_C_ESCAPES: Readonly<Record<string, string>> = {
+  a: '\x07',
+  b: '\b',
+  e: '\x1b',
+  E: '\x1b',
+  f: '\f',
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  v: '\v',
+  '\\': '\\',
+  "'": "'",
+  '"': '"',
+  '?': '?',
+};
+
 /**
  * minimatch options that mirror bash pathname expansion with default shell
  * options: no dotfile matches, no extglob, and no special meaning for a
@@ -403,11 +420,11 @@ const SHELL_GLOB_OPTIONS = {
  */
 const SHELL_GLOB_MATCH_OPTIONS = { ...SHELL_GLOB_OPTIONS, nocase: true } as const;
 
-/** Interpreters whose `-c` argument is itself a shell command */
+/** Interpreters whose `-c` or `+c` argument is itself a shell command */
 const SHELLS = new Set(['bash', 'sh', 'dash', 'zsh', 'ksh', 'ash']);
 
-/** A short option bundle that includes `-c`, such as `-c`, `-ec` or `-lc` */
-const SHELL_COMMAND_OPTION = /^-[A-Za-z]*c[A-Za-z]*$/;
+/** A short option bundle containing `c`; bash accepts both `-c` and `+c` */
+const SHELL_COMMAND_OPTION = /^[-+][A-Za-z]*c[A-Za-z]*$/;
 
 /**
  * Deepest nesting of substitutions, shell strings, evals, comments and
@@ -597,13 +614,20 @@ function splitShellTokens(command: string, nested: string[]): ShellWord[] {
       continue;
     }
 
-    // ANSI-C quoting: a backslash escapes the next character, so `\'` does
-    // not end the quote
+    // Decode supported ANSI-C escapes before checking the path. Reject the
+    // rest rather than silently read a different filename from bash.
     if (quote === "$'") {
       if (ch === "'") {
         quote = null;
       } else if (ch === '\\' && next !== undefined) {
-        literal(next);
+        const escaped = ANSI_C_ESCAPES[next];
+        if (escaped === undefined) {
+          throw new ConfigError(
+            `unsupported ANSI-C escape ${JSON.stringify(`\\${next}`)}; ` +
+              'use literal characters or ordinary quotes'
+          );
+        }
+        literal(escaped);
         i++;
       } else {
         literal(ch);

@@ -33332,6 +33332,21 @@ function parseHooksInput(hooksYaml) {
 }
 var SHELL_SEPARATORS = /* @__PURE__ */ new Set([";", "|", "&", "(", ")"]);
 var GLOB_CHARS = /* @__PURE__ */ new Set(["*", "?", "[", "]", "{", "}", "\\"]);
+var ANSI_C_ESCAPES = {
+  a: "\x07",
+  b: "\b",
+  e: "\x1B",
+  E: "\x1B",
+  f: "\f",
+  n: "\n",
+  r: "\r",
+  t: "	",
+  v: "\v",
+  "\\": "\\",
+  "'": "'",
+  '"': '"',
+  "?": "?"
+};
 var SHELL_GLOB_OPTIONS = {
   dot: false,
   noext: true,
@@ -33343,7 +33358,7 @@ var SHELL_GLOB_OPTIONS = {
 };
 var SHELL_GLOB_MATCH_OPTIONS = { ...SHELL_GLOB_OPTIONS, nocase: true };
 var SHELLS = /* @__PURE__ */ new Set(["bash", "sh", "dash", "zsh", "ksh", "ash"]);
-var SHELL_COMMAND_OPTION = /^-[A-Za-z]*c[A-Za-z]*$/;
+var SHELL_COMMAND_OPTION = /^[-+][A-Za-z]*c[A-Za-z]*$/;
 var MAX_NESTING = 32;
 function isShell(word) {
   const name = path2.posix.basename(word.replace(/\\/g, "/")).toLowerCase();
@@ -33460,7 +33475,13 @@ function splitShellTokens(command, nested) {
       if (ch === "'") {
         quote = null;
       } else if (ch === "\\" && next !== void 0) {
-        literal2(next);
+        const escaped = ANSI_C_ESCAPES[next];
+        if (escaped === void 0) {
+          throw new ConfigError(
+            `unsupported ANSI-C escape ${JSON.stringify(`\\${next}`)}; use literal characters or ordinary quotes`
+          );
+        }
+        literal2(escaped);
         i++;
       } else {
         literal2(ch);
