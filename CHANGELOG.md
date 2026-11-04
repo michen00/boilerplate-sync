@@ -6,6 +6,13 @@ All notable changes will be documented in this file. See [conventional commits](
 
 The format is based on [Keep a Changelog](https://keepachangelog.com) and this project adheres to [Semantic Versioning](https://semver.org).
 
+## [1.1.1](https://github.com/michen00/boilerplate-sync/compare/v1.1.0...v1.1.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **ci:** fold generated README pull request prose ([#237](https://github.com/michen00/boilerplate-sync/issues/237)) ([a54dacb](https://github.com/michen00/boilerplate-sync/commit/a54dacb835b35f73edacbbc0e7a1035804bd7168))
+
 ## [1.1.0](https://github.com/michen00/boilerplate-sync/compare/v1.0.5...v1.1.0) (2026-11-04)
 
 
