@@ -50,11 +50,13 @@ This action is designed as a simpler alternative to templating tools for targete
 
 ## Quick Start
 
+The action uses the GitHub Actions Node.js 24 runtime. Self-hosted runners must support that runtime. Hooks also need bash and any tools their commands invoke (for example, `jq`).
+
 ```yaml
 name: Sync Boilerplate
 on:
   schedule:
-    - cron: '0 9 * * 1' # Every Monday at 9am
+    - cron: '0 9 * * 1' # Every Monday at 09:00 UTC
   workflow_dispatch: # Manual trigger
 
 jobs:
@@ -75,11 +77,11 @@ jobs:
             - source: my-org/boilerplate
               ref: main
               default_files:
-                - .eslintrc.js
+                - eslint.config.mjs
                 - .prettierrc
               file_pairs:
-                - local_path: .github/workflows/ci.yml
-                  source_path: workflows/ci.yml
+                - local_path: .github/PULL_REQUEST_TEMPLATE.md
+                  source_path: templates/pull-request.md
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Pull Request
@@ -131,13 +133,15 @@ Each file mapping in `file_pairs`:
 | `local_path` | ✅ | Path in your repository to update |
 | `source_path` | ❌ | Path to the file in the source repository. Defaults to `local_path` if not specified |
 
+Glob patterns are supported only in `default_files`; each `file_pairs` entry selects one source file.
+
 ```yaml
 sources: |
   # Sync files with same paths in both repos
   - source: my-org/boilerplate
     ref: main
     default_files:
-      - .eslintrc.js
+      - eslint.config.mjs
       - .prettierrc
 
   # Sync files with different paths
@@ -185,18 +189,30 @@ When a glob pattern matches multiple files, each matched file is synced with `lo
 
 ### Hooks
 
-The optional `hooks` input runs your own commands at three points in a sync. Like `sources`, it is YAML:
+Lifecycle hooks require **v1.1.0 or later**. The optional `hooks` input runs your own commands at three points in a sync. Like `sources`, it is YAML. This example applies a local JSON overlay and rewrites documentation without running code from the synced files:
 
 ```yaml
-hooks: |
-  pre-sync: test -f .github/boilerplate.lock
-  transform:
-    package.json: jq -s '.[0] * .[1]' - .github/package.overrides.json
-    'docs/*.md': sed 's/upstream-org/our-org/g'
-  post-sync:
-    - npx prettier --write .
-    - npm test
+- uses: actions/checkout@v7
+  with:
+    persist-credentials: false
+
+- name: Sync with local customizations
+  uses: michen00/boilerplate-sync@v1
+  with:
+    sources: |
+      - source: my-org/boilerplate
+        default_files:
+          - package.json
+          - docs/*.md
+    hooks: |
+      pre-sync: test -f .github/package.overrides.json
+      transform:
+        package.json: jq -s '.[0] * .[1]' - .github/package.overrides.json
+        'docs/*.md': sed 's/upstream-org/our-org/g'
+      post-sync: git diff --stat
 ```
+
+Commit `.github/package.overrides.json` in the consuming repository and keep it outside the synced file list. To run formatters or tests after syncing, see [Hook security](#hook-security) first.
 
 | Key | Value | When it runs |
 | --- | --- | --- |
@@ -256,7 +272,7 @@ The path check also inspects a shell's `+c` command string, including option bun
 
 The second check covers what a command names, not what it runs indirectly. It does not resolve variables, and a command can still run synced code through another program: `npm test` runs scripts from a synced `package.json`, and `make` reads a synced `Makefile`. That code runs before anyone reviews the pull request. When synced files define your tests, run the tests in the pull request's CI instead of in `post-sync`. Never put a token in the step's `env:` when you use hooks, because hooks inherit it.
 
-The action controls only the hook's environment, not the workspace it runs in. By default `actions/checkout` saves its token in the repository's `.git/config`, where any hook, or synced code a hook runs, can read it with `git config --get-regex extraheader`. When you use hooks, set `persist-credentials: false` on the checkout step, and give any later step that pushes its own token:
+The action controls only the hook's environment, not the files it can access. By default [`actions/checkout` persists authentication credentials](https://github.com/actions/checkout/blob/v7.0.1/README.md) for subsequent Git commands; current versions store them under `$RUNNER_TEMP`. Hooks share access to those files. When you use hooks, set `persist-credentials: false` on the checkout step, and give any later step that pushes its own token:
 
 ```yaml
 - uses: actions/checkout@v7
@@ -266,13 +282,15 @@ The action controls only the hook's environment, not the workspace it runs in. B
 
 ## Outputs
 
+After file processing completes, the action writes the step summary and sets these outputs before running `post-sync`. Configuration errors and a failing `pre-sync` produce no outputs.
+
 | Output | Type | Description |
 | --- | --- | --- |
-| `has-changes` | `string` | `"true"` if any files were updated or created, `"false"` otherwise. Always set. |
-| `updated-count` | `string` | Number of files updated or created. Always set. |
-| `failed-count` | `string` | Number of files that failed to sync. Always set. |
-| `skipped-count` | `string` | Number of files skipped (unchanged, or missing when create-missing is disabled). Always set. |
-| `summary` | `JSON` | Full sync summary with details on each file. Always set. |
+| `has-changes` | `string` | `"true"` if any files were updated or created, `"false"` otherwise. |
+| `updated-count` | `string` | Number of files updated or created. |
+| `failed-count` | `string` | Number of files that failed to sync. |
+| `skipped-count` | `string` | Number of files skipped (unchanged, or missing when create-missing is disabled). |
+| `summary` | `string` | JSON-encoded sync summary with details on each file. Per-source tokens are excluded. |
 
 ## Examples
 
@@ -293,7 +311,7 @@ Sync a few config files on a weekly schedule:
 name: Sync Boilerplate
 on:
   schedule:
-    - cron: '0 9 * * 1' # Every Monday at 9am
+    - cron: '0 9 * * 1' # Every Monday at 09:00 UTC
   workflow_dispatch: # Manual trigger
 
 jobs:
@@ -312,11 +330,11 @@ jobs:
           sources: |
             - source: my-org/boilerplate
               default_files:
-                - .eslintrc.js  # local and source paths are the same
+                - eslint.config.mjs  # local and source paths are the same
                 - .github/ISSUE_TEMPLATE/*.md  # glob patterns are supported
               file_pairs:  # glob patterns are NOT supported
-                - local_path: .github/workflows/ci.yml
-                  source_path: workflows/ci.yml
+                - local_path: .github/PULL_REQUEST_TEMPLATE.md
+                  source_path: templates/pull-request.md
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create pull request
@@ -337,7 +355,7 @@ Use a PAT to access private boilerplate repos by specifying `source-token` per s
       - source: my-org/private-boilerplate
         source-token: ${{ secrets.BOILERPLATE_PAT }}
         default_files:
-          - .github/workflows/deploy.yml
+          - .github/ISSUE_TEMPLATE/bug_report.md
       - source: my-org/public-boilerplate
         # No source-token needed - uses github-token
         default_files:
@@ -370,8 +388,8 @@ Only update files that already exist:
     sources: |
       - source: my-org/boilerplate
         file_pairs:
-          - local_path: .github/workflows/ci.yml
-            source_path: workflows/ci.yml
+          - local_path: .github/PULL_REQUEST_TEMPLATE.md
+            source_path: templates/pull-request.md
     github-token: ${{ secrets.GITHUB_TOKEN }}
     create-missing: false
 ```
@@ -411,12 +429,13 @@ Only update files that already exist:
 ## How It Works
 
 1. **Parse Configuration** - Validates the `sources` and `hooks` inputs
-2. **Run `pre-sync`** - Runs the `pre-sync` hook, if configured
-3. **Fetch Source Files** - Downloads each file from its source repository using the GitHub API
-4. **Transform** - Runs the matching `transform` hook, if any, on each fetched file
-5. **Update or Create** - Updates or creates each file whose content differs from the workspace
-6. **Output Results** - Sets outputs (`has-changes`, counts, summary) for use by subsequent steps
-7. **Run `post-sync`** - Runs the `post-sync` hook, if configured
+2. **Expand and Check Paths** - Lists source files for globs through the GitHub API and checks hook references and transform assignments
+3. **Run `pre-sync`** - Runs the `pre-sync` hook, if configured, before any file content is fetched
+4. **Fetch Source Files** - Downloads each file from its source repository using the GitHub API
+5. **Transform** - Runs the matching `transform` hook, if any, on each fetched file
+6. **Update or Create** - Updates or creates each file whose content differs from the workspace
+7. **Output Results** - Sets outputs (`has-changes`, counts, summary) for use by subsequent steps
+8. **Run `post-sync`** - Runs the `post-sync` hook, if configured
 
 The action writes files directly to the workspace. Use [`peter-evans/create-pull-request`](https://github.com/peter-evans/create-pull-request) or similar to create a PR from the changes.
 
@@ -426,11 +445,11 @@ When using with [`peter-evans/create-pull-request`](https://github.com/peter-eva
 
 ```yaml
 permissions:
-  contents: write # To write files and push branches
+  contents: write # To push branches to the target repository
   pull-requests: write # To create PRs (for peter-evans/create-pull-request)
 ```
 
-If using a custom `source-token` for private source repositories, ensure the token has `repo` scope.
+For a private source repository, use a `source-token` with access to that repository. A fine-grained PAT or GitHub App token needs [Contents: read](https://docs.github.com/en/rest/repos/contents#fine-grained-access-tokens-for-get-repository-content); a classic PAT needs `repo` scope. The workflow's default `GITHUB_TOKEN` is scoped to the consuming repository, so use a separate source token to read another private repository.
 
 ## Security
 
@@ -470,7 +489,7 @@ Key risks to consider:
 
 **Recommended use cases:**
 
-- Non-critical configuration files (e.g., `.eslintrc.js`, `.prettierrc`)
+- Non-critical configuration files (e.g., `eslint.config.mjs`, `.prettierrc`)
 - Workflow files that are truly boilerplate
 - Documentation templates
 - Shared tooling configurations
