@@ -12,22 +12,37 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  actions: write
-  contents: write
-  id-token: write
-  pull-requests: write
+  contents: read
 
 jobs:
   sync:
     name: Sync boilerplate files
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     env:
       BRANCH_NAME: chore/sync-boilerplate/${{ github.run_id }}
       COMMIT_MESSAGE: 'chore: auto-sync boilerplate files'
     steps:
+      - name: Verify App credentials are configured
+        env:
+          APP_CLIENT_ID: ${{ vars.APP_CLIENT_ID }}
+          APP_KEY_SET: ${{ secrets.APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ -z "$APP_CLIENT_ID" ] || [ "$APP_KEY_SET" != "true" ]; then
+            echo "::error::Set vars.APP_CLIENT_ID and secrets.APP_PRIVATE_KEY first."
+            exit 1
+          fi
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
       - uses: actions/checkout@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
       - name: Sync files
         id: sync
         uses: michen00/boilerplate-sync@main
@@ -36,73 +51,25 @@ jobs:
             - source: michen00/template
               default_files:
                 - .editorconfig
+                - .github/actionlint.yaml
+                - .github/actions/detect-bot-author/action.yml
+                - .github/scripts/approve-bot-gated-runs.sh
                 - .gitlint
                 - .markdownlint.yml
                 - .prettierrc
+                - tombi.toml
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-error: 'true'
-      - name: Stage changes and create branch
-        if: steps.sync.outputs.has-changes == 'true'
-        run: |
-          set -e
-          git add .
-          git switch -c ${{ env.BRANCH_NAME }}
-          set +e
-          STAGED_DIFF=$(git diff --cached 2>&1 || true)
-          if [ -z "$STAGED_DIFF" ]; then
-            exit_code=0
-          else
-            exit_code=1
-          fi
-          set -e
-          echo "::debug::${STAGED_DIFF:-no changes}"
-          if [ $exit_code -eq 0 ]; then
-            echo '::group::Debug: Sync action summary'
-            echo "Sync action reported has-changes: ${{ steps.sync.outputs.has-changes }}"
-            echo "Updated/Created count: ${{ steps.sync.outputs.updated-count }}"
-            echo "Skipped count: ${{ steps.sync.outputs.skipped-count }}"
-            echo "Failed count: ${{ steps.sync.outputs.failed-count }}"
-            SUMMARY_JSON="${{ steps.sync.outputs.summary }}"
-            if [ -n "$SUMMARY_JSON" ]; then
-              echo "Summary JSON:"
-              echo "$SUMMARY_JSON" | jq '.' 2>/dev/null || echo "$SUMMARY_JSON"
-            fi
-            echo '::endgroup::'
-            echo '::group::Debug: Git status'
-            git status --porcelain || echo "git status failed"
-            echo '::endgroup::'
-            echo '::group::Debug: Git diff (working directory)'
-            git diff --name-status || echo "git diff failed"
-            echo '::endgroup::'
-            echo '::group::Debug: Staged changes (should be empty)'
-            git diff --cached --name-status || echo "No staged changes"
-            echo '::endgroup::'
-            echo '::error title=No files staged after sync::Sync action reported changes but no files were staged. Likely causes: gitignored files, gitignore conflicts, or untracked files.'
-            exit 1
-          fi
-          echo '::notice::Changes staged. Proceeding with commit.'
-          git push -u origin ${{ env.BRANCH_NAME }}
-      - name: Commit changes
-        if: steps.sync.outputs.has-changes == 'true'
-        uses: iarekylew00t/verified-bot-commit@1ee4374942e5c5f814e9b3121d766cbe45cea360 # v2.3.6
-        with:
-          ref: ${{ env.BRANCH_NAME }}
-          auto-stage: false
-          if-no-commit: error
-          update-local: false
-          message: ${{ env.COMMIT_MESSAGE }}
-          files: |
-            .*
-            **/.*
-            **/*
       - name: Build PR body
         if: steps.sync.outputs.has-changes == 'true'
         id: pr-body
+        env:
+          SYNC_SUMMARY: ${{ steps.sync.outputs.summary }}
         uses: actions/github-script@v9
         with:
           result-encoding: string
           script: |
-            const summary = JSON.parse(`${{ steps.sync.outputs.summary }}`);
+            const summary = JSON.parse(process.env.SYNC_SUMMARY);
 
             let body = `## Boilerplate Sync\n\nThis PR updates project files from their boilerplate sources.\n\n`;
 
@@ -151,7 +118,7 @@ jobs:
           signoff: true
 
           sign-commits: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
           delete-branch: true
       - name: Supersede older boilerplate PRs
@@ -160,14 +127,4 @@ jobs:
         with:
           stream-prefix: chore/sync-boilerplate
           successor-pr-number: ${{ steps.create-pr.outputs.pull-request-number }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Trigger required checks
-        if: steps.create-pr.outputs.pull-request-number != ''
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}
-        run: |
-          echo "::info::PR #$PR_NUMBER created. Triggering required checks..."
-
-          # Trigger CI workflow to ensure checks run
-          gh workflow run ci.yml --ref ${{ env.BRANCH_NAME }} || echo "::warning::Failed to trigger CI workflow (may already be running)"
+          token: ${{ steps.app-token.outputs.token }}

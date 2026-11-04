@@ -1,18 +1,19 @@
 ---
 name: Freeze PR links
 
-# A pull request body or comment can link its own head branch --
-# https://github.com/michen00/boilerplate-sync/blob/<branch>/<path> --
-# and that link breaks once the branch is deleted on merge. The action pins
-# every such link to the head commit's SHA at merge; its README says what it
-# rewrites and what it leaves alone.
+# A pull request body or comment can link a file on its own head branch,
+# `https://github.com/<owner>/<repo>/blob/<branch>/<path>`, and that link
+# breaks once the branch is deleted after merging. The action rewrites each
+# such link to the head commit's SHA when the pull request merges; its README
+# says what it rewrites and what it leaves alone.
 #
 # No `issues: write`: `pull-requests` already covers a pull request's
 # conversation comments.
 #
-# `pull_request_target` loads this workflow from `main`, and the action runs
-# from the release the tag below names, which a ruleset there keeps from
-# moving. Nothing from the pull request is checked out or run.
+# `pull_request_target` loads this workflow from the default branch, and the
+# action runs from the release the tag below names, which a ruleset in its
+# repository keeps from moving. Nothing from the pull request is checked out
+# or run.
 
 on:
   pull_request_target:

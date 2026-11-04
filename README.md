@@ -18,7 +18,7 @@ A GitHub Action that keeps your project boilerplate files in sync with another r
 - 📁 **Glob patterns** - Sync multiple files with patterns like `*.md` or `**/*.yml`
 - 🪝 **Lifecycle hooks** - Check the workspace before a sync, keep local changes to synced files with transforms, and run formatters or tests afterwards
 
-_Note: This action currently cannot sync `.github/workflows/*.y{,a}ml` files without additional permissions ([e.g.](https://github.com/actions/create-github-app-token)) and configuration (see [discussion](https://github.com/orgs/community/discussions/35410))._
+Syncing `.github/workflows/*.y{,a}ml` requires a token with permission to update workflow files for the commit and PR steps. See [the App-backed template sync setup](#template-sync-authentication-and-file-selection).
 
 In **this repository**, scheduled boilerplate sync workflows use reserved head branch prefixes—`chore/sync-boilerplate/<run_id>` for non-workflow files and `chore/sync-boilerplate-workflows/<run_id>` for workflow copies—so automation can supersede older open PRs in the same stream. Do not use those prefixes for manual branches.
 
@@ -343,6 +343,34 @@ jobs:
           branch: boilerplate-sync/${{ github.run_id }}
           title: 'chore: sync boilerplate files'
 ```
+
+### Template sync authentication and file selection
+
+This repository's two template-sync workflows reuse `vars.APP_CLIENT_ID` and `secrets.APP_PRIVATE_KEY`, the same credentials referenced by the release workflow. The App must be installed on the destination repository with **Contents: write** and **Pull requests: write**. The workflow-file stream also requests **Workflows: write**; approve that permission on the installation if needed. Token creation fails if the App lacks the requested permissions.
+
+Both workflows run only from the default branch. Non-workflow files sync weekly or on manual dispatch; workflow files sync on manual dispatch. Changes become signed App-authored pull requests, which can trigger normal PR checks. Runs with no changes skip PR creation. The public template is read using `GITHUB_TOKEN`, so the App token only needs access to this destination repository.
+
+The selection was compared against template commit [`4184670`](https://github.com/michen00/template/commit/418467037184ad493d396ee6ed80de32183ef1d0) on 2026-11-03. These 13 files have equivalent configuration and behavior here:
+
+| Stream | Selected files |
+| --- | --- |
+| Configs | `.editorconfig`, `.gitlint`, `.markdownlint.yml`, `.prettierrc`, `tombi.toml`, `.github/actionlint.yaml` |
+| Supporting automation | `.github/actions/detect-bot-author/action.yml`, `.github/scripts/approve-bot-gated-runs.sh` |
+| Workflows | `bot-automerge-disarm.yml`, `freeze-pr-links.yml`, `greet-new-contributors.yml`, `pr-body-unwrap.yml`, `pr-catchup.yml` |
+
+The greeting transform preserves the `boilerplate-sync` community name. Other differences are comments or equivalent JSON/YAML formatting. The supporting action and script are included because the greeting and catch-up workflows depend on them. Future runs follow the template's default branch and propose updates through PRs.
+
+Project-specific CI, release, auto-merge, PR checks, editor settings, and lint/ignore configurations remain local. The previous workflow selection included an upstream file that no longer exists (`pre-commit-autoupdate.yml`), a linter with different triggers (`lint-github-actions.yml`), and branch deletion with different protection error handling (`delete-bot-branches-for-closed-prs.yml`); these are excluded from sync, while their local files remain in place.
+
+To expand the selection, edit `sources` in the corresponding workflow:
+
+- Add same-path files or globs to `default_files`, such as `.github/ISSUE_TEMPLATE/*.md` or `docs/**/*.md`.
+- Use `file_pairs` when the source and destination paths differ.
+- Put `.github/workflows/` files in `sync-template-github-workflows.yml` so commits use a token with workflow-write permission.
+
+Select files appropriate for the destination project: `michen00/template` includes Python-specific configuration that may not apply here. Files are replaced with upstream content; use [transforms](#transforms) when local customization is needed. The action currently handles UTF-8 text, not arbitrary binary files.
+
+The existing **App token check** workflow verifies token creation and repository access. A successful sync run is still needed to verify workflow-write permission and PR creation end to end.
 
 ### Private Source Repository
 
