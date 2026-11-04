@@ -456,7 +456,7 @@ For a private source repository, use a `source-token` with access to that reposi
 Release tags (`vX.Y.Z`) are protected by a tag ruleset covering `refs/tags/v*.*.*`: `update` and `deletion` are blocked, so once published they are immutable. They are annotated but **unsigned**. The `v1` alias is deliberately outside that ruleset and movable (it tracks the latest `v1.x` release) and is created by the release automation, not by hand. Integrity for the consumed artifact comes from SLSA build provenance, verifiable with `gh attestation verify dist/index.js --repo michen00/boilerplate-sync`. Pin the action to a full commit SHA if your threat model includes compromise of this repository:
 
 ```yaml
-- uses: michen00/boilerplate-sync@71ae697d460e162da329f3d9b8b35e747db11fb4 # v1.0.5
+- uses: michen00/boilerplate-sync@0e9141c0e4cba19be30565e78b0afdb29e470635 # v1.1.0
 ```
 
 Report vulnerabilities privately via [GitHub security advisories](https://github.com/michen00/boilerplate-sync/security/advisories/new) — see [SECURITY.md](SECURITY.md). This is a personal project maintained on a best-effort basis.
