@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as core from '@actions/core';
 import { ConfigError, getInputs } from '../src/config';
-import { syncFiles } from '../src/sync';
+import { HookError } from '../src/hooks';
+import { runPostSync, syncFiles } from '../src/sync';
 import type { ActionInputs, SyncResult, SyncSummary } from '../src/sources/types';
 
 // The step summary builder is chained (addRaw(...).write()), so the mock
@@ -28,8 +29,13 @@ vi.mock('../src/config', async (importOriginal) => ({
   logConfig: vi.fn(),
 }));
 
+// A pass-through mock: mocked modules survive vi.resetModules(), so the
+// entry point and these tests share one HookError class for instanceof.
+vi.mock('../src/hooks', async (importOriginal) => importOriginal<typeof import('../src/hooks')>());
+
 vi.mock('../src/sync', () => ({
   syncFiles: vi.fn(),
+  runPostSync: vi.fn(),
 }));
 
 const inputs: ActionInputs = {
@@ -76,6 +82,7 @@ describe('action entry point', () => {
     vi.resetAllMocks();
     vi.mocked(getInputs).mockReturnValue(inputs);
     vi.mocked(syncFiles).mockResolvedValue(summary);
+    vi.mocked(runPostSync).mockResolvedValue(false);
   });
 
   it('sets every output, with no token in the summary output', async () => {
@@ -96,6 +103,43 @@ describe('action entry point', () => {
       updated: [{ config: { local_path: 'a.json', source: 'org/private' }, status: 'updated' }],
       total: 1,
     });
+    expect(core.setFailed).not.toHaveBeenCalled();
+  });
+
+  it('runs post-sync after the step summary and outputs are written', async () => {
+    await runAction(() => expect(runPostSync).toHaveBeenCalled());
+
+    expect(runPostSync).toHaveBeenCalledWith(inputs, summary);
+    const postSyncOrder = vi.mocked(runPostSync).mock.invocationCallOrder[0];
+    expect(postSyncOrder).toBeGreaterThan(Math.max(...vi.mocked(core.setOutput).mock.invocationCallOrder));
+    expect(postSyncOrder).toBeGreaterThan(stepSummary.write.mock.invocationCallOrder[0]);
+  });
+
+  it('fails after setting outputs when post-sync fails', async () => {
+    vi.mocked(runPostSync).mockRejectedValue(
+      new HookError('post-sync command 1 of 1 exited with code 1: npm test')
+    );
+
+    await runAction(() => expect(core.setFailed).toHaveBeenCalled());
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'Hook failed: post-sync command 1 of 1 exited with code 1: npm test'
+    );
+    expect(core.setOutput).toHaveBeenCalledWith('has-changes', 'true');
+  });
+
+  it('reports a pre-sync failure without setting outputs', async () => {
+    vi.mocked(syncFiles).mockRejectedValue(
+      new HookError('pre-sync command 1 of 1 exited with code 1: test -f lock')
+    );
+
+    await runAction(() => expect(core.setFailed).toHaveBeenCalled());
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'Hook failed: pre-sync command 1 of 1 exited with code 1: test -f lock'
+    );
+    expect(core.setOutput).not.toHaveBeenCalled();
+    expect(runPostSync).not.toHaveBeenCalled();
   });
 
   it('writes the step summary', async () => {

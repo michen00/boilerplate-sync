@@ -1,10 +1,15 @@
 import * as core from '@actions/core';
+import * as path from 'path';
+import { Minimatch, minimatch } from 'minimatch';
 import { parse as parseYaml } from 'yaml';
+import { isGlobPattern } from './sources/github';
 import type {
   ActionInputs,
   SourceConfig,
   FileMapping,
   NormalizedFileSyncConfig,
+  HooksConfig,
+  TransformRule,
 } from './sources/types';
 
 /**
@@ -235,6 +240,786 @@ export function normalizeSources(
   return normalized;
 }
 
+/** Keys allowed in the `hooks` input, in the order the hooks run */
+const HOOK_KEYS = ['pre-sync', 'transform', 'post-sync'] as const;
+type HookKey = (typeof HOOK_KEYS)[number];
+
+/** The options `default_files` glob expansion uses (see sources/github.ts) */
+const GLOB_OPTIONS = { matchBase: false } as const;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Normalise a glob pattern for comparison: POSIX-normalised, with no
+ * leading `./` and no trailing `/`. Backslashes are kept, because in a glob
+ * a backslash escapes the next character.
+ */
+export function normalizeGlobPattern(pattern: string): string {
+  const normalized = path.posix.normalize(pattern.trim());
+  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
+}
+
+/**
+ * Normalise a local path for comparison. Unlike a glob pattern, a path
+ * treats a backslash as a Windows separator, so `scripts\merge.sh` written
+ * in a config or a quoted hook word matches `scripts/merge.sh`: on a
+ * Windows runner both name the same file.
+ */
+export function normalizeLocalPath(localPath: string): string {
+  return normalizeGlobPattern(localPath.replace(/\\/g, '/'));
+}
+
+/**
+ * Validate `pre-sync` or `post-sync`: one command or a non-empty list
+ */
+function parseHookCommands(value: unknown, key: HookKey): string[] {
+  const commands: unknown = typeof value === 'string' ? [value] : value;
+  if (!Array.isArray(commands) || commands.length === 0) {
+    throw new ConfigError(
+      `hooks.${key}: must be a command string or a non-empty list of command strings`
+    );
+  }
+
+  return commands.map((command: unknown, index) => {
+    if (typeof command !== 'string' || !command.trim()) {
+      const where = typeof value === 'string' ? `hooks.${key}` : `hooks.${key}[${index}]`;
+      throw new ConfigError(`${where}: must be a non-empty command string`);
+    }
+    return command.trim();
+  });
+}
+
+/**
+ * Validate `transform`: a non-empty map of local path or glob to one command
+ */
+function parseTransformRules(value: unknown): TransformRule[] {
+  if (!isPlainObject(value) || Object.keys(value).length === 0) {
+    throw new ConfigError(
+      'hooks.transform: must map at least one local path or glob to a command'
+    );
+  }
+
+  const rules: TransformRule[] = [];
+  const seen = new Set<string>();
+  for (const [key, command] of Object.entries(value)) {
+    if (!key.trim()) {
+      throw new ConfigError('hooks.transform: keys must be non-empty local paths or globs');
+    }
+    if (typeof command !== 'string' || !command.trim()) {
+      throw new ConfigError(
+        `hooks.transform['${key}']: must be a non-empty command string`
+      );
+    }
+
+    // An exact key names a local path, where a backslash is a Windows
+    // separator; in a glob key a backslash escapes the next character
+    const pattern = isGlobPattern(key) ? normalizeGlobPattern(key) : normalizeLocalPath(key);
+    if (seen.has(pattern)) {
+      throw new ConfigError(
+        `hooks.transform: duplicate key '${pattern}' after removing './'`
+      );
+    }
+    seen.add(pattern);
+    rules.push({ pattern, command: command.trim() });
+  }
+
+  return rules;
+}
+
+/**
+ * Parse the 'hooks' input YAML. Returns undefined when no hook is configured.
+ */
+export function parseHooksInput(hooksYaml: string): HooksConfig | undefined {
+  if (!hooksYaml.trim()) {
+    return undefined;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(hooksYaml);
+  } catch (error) {
+    // yaml throws YAMLParseError, an Error
+    throw new ConfigError(`Failed to parse 'hooks' YAML: ${(error as Error).message}`);
+  }
+
+  if (parsed === null || parsed === undefined) {
+    return undefined;
+  }
+  if (!isPlainObject(parsed)) {
+    throw new ConfigError(
+      `'hooks' must be a YAML mapping with the keys ${HOOK_KEYS.join(', ')}`
+    );
+  }
+
+  const keys = Object.keys(parsed);
+  for (const key of keys) {
+    if (!(HOOK_KEYS as readonly string[]).includes(key)) {
+      throw new ConfigError(
+        `hooks: unknown key '${key}' (allowed: ${HOOK_KEYS.join(', ')})`
+      );
+    }
+  }
+  if (keys.length === 0) {
+    return undefined;
+  }
+
+  return {
+    preSync: 'pre-sync' in parsed ? parseHookCommands(parsed['pre-sync'], 'pre-sync') : [],
+    transform: 'transform' in parsed ? parseTransformRules(parsed.transform) : [],
+    postSync:
+      'post-sync' in parsed ? parseHookCommands(parsed['post-sync'], 'post-sync') : [],
+  };
+}
+
+/** Characters that end a shell word and the command, outside quotes */
+const SHELL_SEPARATORS = new Set([';', '|', '&', '(', ')']);
+
+/** Characters that are glob or brace syntax to bash when unquoted */
+const GLOB_CHARS = new Set(['*', '?', '[', ']', '{', '}', '\\']);
+
+/** ANSI-C escapes whose literal value the synced-path check can safely read */
+const ANSI_C_ESCAPES: Readonly<Record<string, string>> = {
+  a: '\x07',
+  b: '\b',
+  e: '\x1b',
+  E: '\x1b',
+  f: '\f',
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  v: '\v',
+  '\\': '\\',
+  "'": "'",
+  '"': '"',
+  '?': '?',
+};
+
+/**
+ * minimatch options that mirror bash pathname expansion with default shell
+ * options: no dotfile matches, no extglob, and no special meaning for a
+ * leading `!` or `#`. Patterns are POSIX on every runner OS.
+ */
+const SHELL_GLOB_OPTIONS = {
+  dot: false,
+  noext: true,
+  nonegate: true,
+  nocomment: true,
+  matchBase: false,
+  magicalBraces: true,
+  platform: 'linux',
+} as const;
+
+/**
+ * Matching options for a hook word's glob against synced paths. Case is
+ * ignored because the filesystems of Windows and default macOS runners are
+ * case-insensitive, so `SCRIPTS/*.sh` reaches `scripts/merge.sh` there.
+ * Kept apart from SHELL_GLOB_OPTIONS because with `nocase` minimatch treats
+ * any word with letters as magic.
+ */
+const SHELL_GLOB_MATCH_OPTIONS = { ...SHELL_GLOB_OPTIONS, nocase: true } as const;
+
+/** Interpreters whose `-c` or `+c` argument is itself a shell command */
+const SHELLS = new Set(['bash', 'sh', 'dash', 'zsh', 'ksh', 'ash']);
+
+/** A short option bundle containing `c`; bash accepts both `-c` and `+c` */
+const SHELL_COMMAND_OPTION = /^[-+][A-Za-z]*c[A-Za-z]*$/;
+
+/**
+ * Deepest nesting of substitutions, shell strings, evals, comments and
+ * here-documents that the synced-path check follows before rejecting the
+ * command
+ */
+const MAX_NESTING = 32;
+
+/**
+ * Whether a word names a shell, by path or as a Windows executable, in any
+ * case: case-insensitive filesystems run `BASH` and `bash.exe` as bash
+ */
+function isShell(word: string): boolean {
+  const name = path.posix.basename(word.replace(/\\/g, '/')).toLowerCase();
+  return SHELLS.has(name.replace(/\.exe$/, ''));
+}
+
+/** A here-document whose body starts on the line after its `<<` operator */
+interface Heredoc {
+  delimiter: string;
+  stripTabs: boolean;
+}
+
+/** Index of the newline that ends the line containing `start`, or the command's length */
+function lineEnd(command: string, start: number): number {
+  const newline = command.indexOf('\n', start);
+  return newline < 0 ? command.length : newline;
+}
+
+/**
+ * A shell word: its text after quote removal, the glob pattern bash expands
+ * it with (quoted and escaped characters escaped again, so only unquoted
+ * glob syntax stays magic), and whether it starts a simple command
+ */
+interface ShellWord {
+  text: string;
+  pattern: string;
+  startsCommand: boolean;
+}
+
+/**
+ * Index of the `)` that closes a `$(` whose body starts at `start`, or the
+ * command's length when it is unterminated. Parentheses inside quotes or
+ * comments, or escaped with a backslash, do not count.
+ */
+function closingParen(command: string, start: number): number {
+  let depth = 1;
+  let quote: "'" | '"' | "$'" | null = null;
+
+  for (let i = start; i < command.length; i++) {
+    const ch = command[i];
+    if (quote === "'") {
+      if (ch === "'") quote = null;
+    } else if (ch === '\\') {
+      i++;
+    } else if (quote === '"') {
+      if (ch === '"') quote = null;
+    } else if (quote === "$'") {
+      if (ch === "'") quote = null;
+    } else if (ch === '$' && command[i + 1] === "'") {
+      quote = "$'";
+      i++;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
+    } else if (ch === '#' && (i === start || /[\s;&|()]/.test(command[i - 1]))) {
+      i = lineEnd(command, i) - 1;
+    } else if (ch === '(') {
+      depth++;
+    } else if (ch === ')' && --depth === 0) {
+      return i;
+    }
+  }
+  return command.length;
+}
+
+/**
+ * Index of the backtick that closes one opened just before `start`, or the
+ * command's length when it is unterminated
+ */
+function closingBacktick(command: string, start: number): number {
+  for (let i = start; i < command.length; i++) {
+    if (command[i] === '\\') i++;
+    else if (command[i] === '`') return i;
+  }
+  return command.length;
+}
+
+/**
+ * Read the delimiter of a here-document whose `<<` ends just before `start`,
+ * queue it, and return the index after the delimiter
+ */
+function readHeredocDelimiter(command: string, start: number, heredocs: Heredoc[]): number {
+  let i = start;
+  const stripTabs = command[i] === '-';
+  if (stripTabs) i++;
+  while (command[i] === ' ' || command[i] === '\t') i++;
+
+  let delimiter = '';
+  while (i < command.length && !/[\s;&|()<>]/.test(command[i])) {
+    const ch = command[i];
+    if (ch === "'" || ch === '"') {
+      const close = command.indexOf(ch, i + 1);
+      const end = close < 0 ? command.length : close;
+      delimiter += command.slice(i + 1, end);
+      i = end + 1;
+    } else if (ch === '\\') {
+      delimiter += command[i + 1] ?? '';
+      i += 2;
+    } else {
+      delimiter += ch;
+      i++;
+    }
+  }
+
+  if (delimiter !== '') heredocs.push({ delimiter, stripTabs });
+  return i;
+}
+
+/**
+ * Push the body of each queued here-document, starting at `start`, to
+ * `nested`, and return the index after the last delimiter line. A body is
+ * checked as a command of its own because a shell may run it (`bash <<EOF`)
+ * and because an unquoted body runs its substitutions.
+ */
+function readHeredocBodies(
+  command: string,
+  start: number,
+  heredocs: Heredoc[],
+  nested: string[]
+): number {
+  let i = start;
+  for (const { delimiter, stripTabs } of heredocs) {
+    const body: string[] = [];
+    while (i < command.length) {
+      const end = lineEnd(command, i);
+      const line = command.slice(i, end);
+      i = end + 1;
+      if ((stripTabs ? line.replace(/^\t+/, '') : line) === delimiter) break;
+      body.push(line);
+    }
+    nested.push(body.join('\n'));
+  }
+  return i;
+}
+
+/**
+ * Split a command into shell words, honouring quotes and backslash escapes
+ * and treating shell operators and newlines as separators. Strings that bash
+ * may run, or that a misread quote could otherwise hide, are pushed to
+ * `nested` for the caller to check as commands of their own: the body of
+ * each command substitution, `$(...)` or backticks, unquoted or inside
+ * double quotes; the text of each comment; and the body of each
+ * here-document. It does not expand variables: it finds the paths a command
+ * names, and is not a shell parser.
+ */
+function splitShellTokens(command: string, nested: string[]): ShellWord[] {
+  const words: ShellWord[] = [];
+  let text = '';
+  let pattern = '';
+  let inWord = false;
+  let atCommandStart = true;
+  let quote: "'" | '"' | "$'" | null = null;
+  const heredocs: Heredoc[] = [];
+
+  const literal = (ch: string): void => {
+    text += ch;
+    pattern += GLOB_CHARS.has(ch) ? `\\${ch}` : ch;
+  };
+
+  const endWord = (): void => {
+    if (inWord) {
+      words.push({ text, pattern, startsCommand: atCommandStart });
+      atCommandStart = false;
+      text = '';
+      pattern = '';
+      inWord = false;
+    }
+  };
+
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+    const next = command[i + 1];
+
+    if (quote === "'") {
+      if (ch === "'") quote = null;
+      else literal(ch);
+      continue;
+    }
+
+    // Decode supported ANSI-C escapes before checking the path. Reject the
+    // rest rather than silently read a different filename from bash.
+    if (quote === "$'") {
+      if (ch === "'") {
+        quote = null;
+      } else if (ch === '\\' && next !== undefined) {
+        const escaped = ANSI_C_ESCAPES[next];
+        if (escaped === undefined) {
+          throw new ConfigError(
+            `unsupported ANSI-C escape ${JSON.stringify(`\\${next}`)}; ` +
+              'use literal characters or ordinary quotes'
+          );
+        }
+        literal(escaped);
+        i++;
+      } else {
+        literal(ch);
+      }
+      continue;
+    }
+
+    // A substitution runs even inside double quotes; its output joins the
+    // current word, but its body is a command bash executes.
+    if (ch === '$' && next === '(') {
+      const end = closingParen(command, i + 2);
+      nested.push(command.slice(i + 2, end));
+      inWord = true;
+      i = end;
+      continue;
+    }
+    if (ch === '`') {
+      const end = closingBacktick(command, i + 1);
+      nested.push(command.slice(i + 1, end));
+      inWord = true;
+      i = end;
+      continue;
+    }
+
+    if (quote === '"') {
+      if (ch === '"') {
+        quote = null;
+      } else if (ch === '\\' && next === '\n') {
+        // Line continuation, which bash removes inside double quotes too
+        i++;
+      } else if (ch === '\\' && next !== undefined && '"\\$`'.includes(next)) {
+        literal(next);
+        i++;
+      } else {
+        literal(ch);
+      }
+      continue;
+    }
+
+    if (ch === '$' && (next === "'" || next === '"')) {
+      // $'...' (ANSI-C) and $"..." (locale) quoting: the `$` is not part of
+      // the word
+      quote = next === "'" ? "$'" : '"';
+      inWord = true;
+      i++;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
+      inWord = true;
+    } else if (ch === '#' && !inWord) {
+      // A comment runs to the end of the line. Its text is checked as a
+      // command of its own, so a quote in it, as in "# Don't", cannot hide
+      // the lines after it.
+      const end = lineEnd(command, i);
+      nested.push(command.slice(i + 1, end));
+      i = end - 1;
+    } else if (ch === '<' && next === '<') {
+      endWord();
+      if (command[i + 2] === '<') {
+        // A here-string: the word after `<<<` is an ordinary word
+        i += 2;
+      } else {
+        i = readHeredocDelimiter(command, i + 2, heredocs) - 1;
+      }
+    } else if (ch === '\\') {
+      if (next === '\n') {
+        // Line continuation: joins lines without adding a character
+        i++;
+      } else if (next !== undefined) {
+        literal(next);
+        inWord = true;
+        i++;
+      }
+    } else if (ch === '<' || ch === '>' || (ch === '&' && next === '>')) {
+      // A redirection ends the word but not the command: the shell strips it
+      // before running the command, so `bash >/dev/null -c '...'` and
+      // `bash 2>&1 -c '...'` still run `bash -c`. Consume the `&` or `|`
+      // that belongs to the operator (`>&`, `<&`, `&>`, `>|`).
+      endWord();
+      if (next === '&' || next === '|' || (ch === '&' && next === '>')) {
+        i++;
+      }
+    } else if (ch === '\n' || SHELL_SEPARATORS.has(ch)) {
+      endWord();
+      atCommandStart = true;
+      if (ch === '\n' && heredocs.length > 0) {
+        i = readHeredocBodies(command, i + 1, heredocs.splice(0), nested) - 1;
+      }
+    } else if (/\s/.test(ch)) {
+      endWord();
+    } else {
+      text += ch;
+      pattern += ch;
+      inWord = true;
+    }
+  }
+
+  endWord();
+  return words;
+}
+
+/**
+ * Split a command into shell words (see splitShellTokens)
+ */
+export function splitShellWords(command: string): string[] {
+  return splitShellTokens(command, []).map((word) => word.text);
+}
+
+/**
+ * The parts of a shell word that may name a file: an option's value
+ * (`--config=path`), an assignment and its value (`NAME=path`), or the word.
+ * A word's text and its pattern give aligned results, because escaping
+ * never touches `-` or `=`.
+ */
+function pathCandidates(word: string): string[] {
+  const equals = word.indexOf('=');
+  const value = equals >= 0 ? word.slice(equals + 1) : undefined;
+
+  if (word.startsWith('-')) {
+    return value ? [value] : [];
+  }
+  return value !== undefined ? [word, value] : [word];
+}
+
+/**
+ * The strings bash runs as commands of their own: the words after a shell's
+ * `-c` option, and the joined arguments of `eval`
+ */
+function nestedCommands(words: ShellWord[]): string[] {
+  const nested: string[] = [];
+  let inShell = false;
+  let afterCommandOption = false;
+  let evalArgs: string[] | undefined;
+
+  const endCommand = (): void => {
+    if (evalArgs !== undefined && evalArgs.length > 0) {
+      nested.push(evalArgs.join(' '));
+    }
+    inShell = false;
+    afterCommandOption = false;
+    evalArgs = undefined;
+  };
+
+  for (const word of words) {
+    if (word.startsCommand) {
+      endCommand();
+    }
+
+    if (evalArgs !== undefined) {
+      evalArgs.push(word.text);
+    } else if (afterCommandOption) {
+      // The shell runs the first operand after `-c`, which may follow more
+      // options, `--`, or a redirection (`bash -c -- '...'`,
+      // `bash -c 2>/dev/null '...'`). Check every word rather than guess.
+      nested.push(word.text);
+    } else if (word.text === 'eval') {
+      evalArgs = [];
+    } else if (isShell(word.text)) {
+      inShell = true;
+    } else if (inShell && SHELL_COMMAND_OPTION.test(word.text)) {
+      afterCommandOption = true;
+    }
+  }
+
+  endCommand();
+  return nested;
+}
+
+/**
+ * Find the synced local paths that a command names: directly, through an
+ * unquoted glob that bash would expand to them, or inside a command
+ * substitution, a `bash -c` string, an `eval`, a comment or a here-document.
+ * `synced` must hold normalised paths; checkHookReferences adds each in both
+ * its slash form (normalizeLocalPath) and its raw form (normalizeGlobPattern).
+ * Throws a ConfigError when the command nests more than MAX_NESTING deep.
+ */
+export function findSyncedPathReferences(
+  command: string,
+  synced: ReadonlySet<string>
+): string[] {
+  // Compare ignoring case: a case-insensitive filesystem (Windows, default
+  // macOS) opens scripts/merge.sh for SCRIPTS/merge.sh. Report the synced
+  // path as configured.
+  const syncedByLowerCase = new Map(
+    Array.from(synced, (syncedPath) => [syncedPath.toLowerCase(), syncedPath] as const)
+  );
+  const found = new Set<string>();
+  collectSyncedPathReferences(command, synced, syncedByLowerCase, 0, found);
+  return [...found];
+}
+
+function collectSyncedPathReferences(
+  command: string,
+  synced: ReadonlySet<string>,
+  syncedByLowerCase: ReadonlyMap<string, string>,
+  depth: number,
+  found: Set<string>
+): void {
+  if (depth > MAX_NESTING) {
+    throw new ConfigError(
+      `nests command substitutions, shell strings or evals more than ${MAX_NESTING} levels deep`
+    );
+  }
+
+  const nested: string[] = [];
+  const words = splitShellTokens(command, nested);
+
+  for (const word of words) {
+    const texts = pathCandidates(word.text);
+    const patterns = pathCandidates(word.pattern);
+
+    texts.forEach((text, index) => {
+      for (const literalPath of [normalizeLocalPath(text), normalizeGlobPattern(text)]) {
+        const syncedPath = syncedByLowerCase.get(literalPath.toLowerCase());
+        if (syncedPath !== undefined) {
+          found.add(syncedPath);
+        }
+      }
+
+      const pattern = normalizeGlobPattern(patterns[index]);
+      if (new Minimatch(pattern, SHELL_GLOB_OPTIONS).hasMagic()) {
+        // Compile once per word: brace expansion can make a pattern costly
+        const matcher = new Minimatch(pattern, SHELL_GLOB_MATCH_OPTIONS);
+        for (const syncedPath of synced) {
+          if (matcher.match(syncedPath)) {
+            found.add(syncedPath);
+          }
+        }
+      }
+    });
+  }
+
+  for (const inner of [...nestedCommands(words), ...nested]) {
+    collectSyncedPathReferences(inner, synced, syncedByLowerCase, depth + 1, found);
+  }
+
+  // Check each line on its own as well, starting outside any quote, so a
+  // quote this tokenizer misreads cannot hide the lines after it. A single
+  // line is not split again, so this recursion ends.
+  const lines = command.split('\n');
+  if (lines.length > 1) {
+    for (const line of lines) {
+      collectSyncedPathReferences(line, synced, syncedByLowerCase, depth, found);
+    }
+  }
+}
+
+/**
+ * Every hook command with a label for error messages
+ */
+function labelledHookCommands(
+  hooks: HooksConfig
+): Array<{ label: string; command: string }> {
+  return [
+    ...hooks.preSync.map((command) => ({ label: 'hooks.pre-sync', command })),
+    ...hooks.transform.map((rule) => ({
+      label: `hooks.transform['${rule.pattern}']`,
+      command: rule.command,
+    })),
+    ...hooks.postSync.map((command) => ({ label: 'hooks.post-sync', command })),
+  ];
+}
+
+/**
+ * Reject any hook command that names one of the given synced local paths,
+ * so that a source repository cannot supply code that runs inside this step
+ */
+export function checkHookReferences(
+  hooks: HooksConfig,
+  localPaths: Iterable<string>
+): void {
+  // Keep each path in both forms. The slash form matches what a Windows
+  // runner reads as the same file; the raw form keeps a literal backslash,
+  // which is an ordinary filename character on Linux and which a glob such
+  // as `scripts?merge.sh` reaches there. A hook is flagged if either form
+  // matches, so neither runner OS can be used to slip past the check.
+  const synced = new Set(
+    Array.from(localPaths).flatMap((localPath) => [
+      normalizeLocalPath(localPath),
+      normalizeGlobPattern(localPath),
+    ])
+  );
+
+  for (const { label, command } of labelledHookCommands(hooks)) {
+    let first: string | undefined;
+    try {
+      [first] = findSyncedPathReferences(command, synced);
+    } catch (error) {
+      if (error instanceof ConfigError) {
+        throw new ConfigError(`${label}: command '${command}' ${error.message}`);
+      }
+      throw error;
+    }
+    if (first !== undefined) {
+      throw new ConfigError(
+        `${label}: command '${command}' names synced path '${first}'; ` +
+          'a hook must not run a file that a source repository controls'
+      );
+    }
+  }
+}
+
+/**
+ * Config-time hook checks, run before any hook or GitHub API call:
+ * - a literal transform key must be a synced local path, or be matched by
+ *   a `default_files` glob;
+ * - no hook command may name a literal synced local path.
+ * Paths that only glob expansion reveals are checked later in syncFiles().
+ */
+export function validateHooks(hooks: HooksConfig, sources: SourceConfig[]): void {
+  const configs = normalizeSources(sources);
+
+  const literalLocalPaths = configs
+    .filter((config) => !isGlobPattern(config.source_path))
+    .map((config) => config.local_path);
+  const literalPaths = new Set(literalLocalPaths.map(normalizeLocalPath));
+  const globs = configs
+    .filter((config) => config.origin === 'default_files' && isGlobPattern(config.source_path))
+    .map((config) => normalizeGlobPattern(config.source_path));
+
+  for (const rule of hooks.transform) {
+    if (isGlobPattern(rule.pattern)) {
+      continue;
+    }
+    const synced =
+      literalPaths.has(rule.pattern) ||
+      globs.some((glob) => minimatch(rule.pattern, glob, GLOB_OPTIONS));
+    if (!synced) {
+      throw new ConfigError(
+        `hooks.transform: key '${rule.pattern}' does not match any synced local path`
+      );
+    }
+  }
+
+  // Pass the raw paths: checkHookReferences keeps both separator forms
+  checkHookReferences(hooks, literalLocalPaths);
+}
+
+/**
+ * Whether glob expansion left this config unexpanded, because listing the
+ * source tree failed or nothing matched. Judged by provenance, not by the
+ * characters in the path: a concrete file such as `foo[ab].txt` that a glob
+ * expanded to, or a `file_pairs` destination with that name, is not one.
+ */
+export function isUnexpandedGlob(config: NormalizedFileSyncConfig): boolean {
+  return config.expandedFrom === undefined && isGlobPattern(config.source_path);
+}
+
+/**
+ * Choose the transform rule for each expanded config, by index. Throws when
+ * a file matches more than one key, and warns about keys that match nothing.
+ */
+export function assignTransforms(
+  configs: NormalizedFileSyncConfig[],
+  rules: TransformRule[]
+): Array<TransformRule | undefined> {
+  const used = new Set<TransformRule>();
+
+  const assigned = configs.map((config) => {
+    // A glob that failed to expand keeps its pattern as local_path and will
+    // fail during sync; there is no file to transform.
+    if (isUnexpandedGlob(config)) {
+      return undefined;
+    }
+
+    const localPath = normalizeLocalPath(config.local_path);
+    const matches = rules.filter((rule) =>
+      isGlobPattern(rule.pattern)
+        ? minimatch(localPath, rule.pattern, GLOB_OPTIONS)
+        : rule.pattern === localPath
+    );
+
+    if (matches.length > 1) {
+      throw new ConfigError(
+        `hooks.transform: '${localPath}' matches more than one key: ` +
+          matches.map((rule) => `'${rule.pattern}'`).join(', ')
+      );
+    }
+    if (matches.length === 1) {
+      used.add(matches[0]);
+    }
+    return matches[0];
+  });
+
+  for (const rule of rules) {
+    if (!used.has(rule)) {
+      core.warning(`hooks.transform: key '${rule.pattern}' matches no synced file`);
+    }
+  }
+
+  return assigned;
+}
+
 /**
  * Get and validate all action inputs
  */
@@ -250,11 +1035,17 @@ export function getInputs(): ActionInputs {
   const createMissing = core.getBooleanInput('create-missing');
   const failOnError = core.getBooleanInput('fail-on-error');
 
+  const hooks = parseHooksInput(core.getInput('hooks'));
+  if (hooks) {
+    validateHooks(hooks, sources);
+  }
+
   return {
     sources,
     githubToken,
     createMissing,
     failOnError,
+    hooks,
   };
 }
 
@@ -295,4 +1086,18 @@ export function logConfig(inputs: ActionInputs): void {
     }
   }
   core.endGroup();
+
+  if (inputs.hooks) {
+    core.startGroup('Hooks configuration');
+    for (const command of inputs.hooks.preSync) {
+      core.info(`  pre-sync: ${command}`);
+    }
+    for (const rule of inputs.hooks.transform) {
+      core.info(`  transform ${rule.pattern}: ${rule.command}`);
+    }
+    for (const command of inputs.hooks.postSync) {
+      core.info(`  post-sync: ${command}`);
+    }
+    core.endGroup();
+  }
 }

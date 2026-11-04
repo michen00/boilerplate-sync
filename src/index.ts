@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import { getInputs, logConfig, ConfigError } from './config';
-import { syncFiles } from './sync';
+import { syncFiles, runPostSync } from './sync';
+import { HookError } from './hooks';
 import { generateStepSummary, serializeSummary } from './report';
 import type { ActionOutputs, SyncSummary } from './sources/types';
 
@@ -66,9 +67,15 @@ async function run(): Promise<void> {
         `${summary.failed.length} file(s) failed to sync`
       );
     }
+
+    // post-sync runs after the step summary and outputs are written, so a
+    // failing post-sync still leaves them for later steps
+    await runPostSync(inputs, summary);
   } catch (error) {
     if (error instanceof ConfigError) {
       core.setFailed(`Configuration error: ${error.message}`);
+    } else if (error instanceof HookError) {
+      core.setFailed(`Hook failed: ${error.message}`);
     } else if (error instanceof Error) {
       core.setFailed(`Action failed: ${error.message}`);
       core.debug(error.stack ?? '');

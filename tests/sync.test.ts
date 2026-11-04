@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as core from '@actions/core';
 import { createGitHubSource, isGlobPattern, listFilesMatchingGlob } from '../src/sources/github';
-import { syncFiles } from '../src/sync';
+import { syncFiles, runPostSync } from '../src/sync';
 import { ConfigError } from '../src/config';
-import type { ActionInputs } from '../src/sources/types';
+import { HookError, runHookCommands, runTransform } from '../src/hooks';
+import type { ActionInputs, HooksConfig, SyncSummary } from '../src/sources/types';
 
 // Mock fs/promises
 vi.mock('fs/promises');
@@ -32,6 +33,14 @@ const { makeDefaultGitHubSource } = vi.hoisted(() => ({
     getSourceId: () => 'owner/repo',
     getRef: () => 'main',
   }),
+}));
+
+// Mock the hook runner: these tests cover when hooks run and what their
+// results do, and tests/hooks.test.ts covers the processes themselves.
+vi.mock('../src/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/hooks')>()),
+  runHookCommands: vi.fn(),
+  runTransform: vi.fn(),
 }));
 
 // Mock the GitHub source
@@ -415,6 +424,17 @@ describe('syncFiles glob expansion', () => {
     expect(summary.total).toBe(1);
   });
 
+  it('rejects a glob in file_pairs before pre-sync runs', async () => {
+    const sync = syncFiles({
+      ...globInputs,
+      sources: [{ source: 'owner/repo', file_pairs: [{ local_path: 'ci/*.yml' }] }],
+      hooks: { preSync: ['test -f lock'], transform: [], postSync: [] },
+    });
+
+    await expect(sync).rejects.toThrow(ConfigError);
+    expect(runHookCommands).not.toHaveBeenCalled();
+  });
+
   it('rejects a glob in a file_pairs source instead of silently expanding it', async () => {
     // A glob in file_pairs would lose its explicit local_path if expanded
     // (the README forbids globs here); fail fast rather than silently remap.
@@ -460,5 +480,387 @@ describe('syncFiles glob expansion', () => {
       '.github/workflows/ci.yml',
       '.github/dependabot.yml',
     ]);
+  });
+});
+
+const withHooks = (overrides: Partial<HooksConfig>): HooksConfig => ({
+  preSync: [],
+  transform: [],
+  postSync: [],
+  ...overrides,
+});
+
+describe('syncFiles with a transform', () => {
+  const rule = { pattern: 'package.json', command: 'jq -s ".[0] * .[1]" - overrides.json' };
+  const inputs: ActionInputs = {
+    sources: [{ source: 'owner/repo', ref: 'main', default_files: ['package.json'] }],
+    githubToken: 'gh-token',
+    createMissing: true,
+    failOnError: false,
+    hooks: withHooks({ transform: [rule] }),
+  };
+
+  const fetchReturning = (content: string, resolvedRef = 'main') => {
+    vi.mocked(createGitHubSource).mockImplementation(() => ({
+      toString: () => 'owner/repo@main:package.json',
+      fetch: vi.fn(async () => ({ content, resolvedRef })),
+      type: 'github',
+      getSourceId: () => 'owner/repo',
+      getRef: () => 'main',
+    }));
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+    fetchReturning('upstream');
+  });
+
+  it('reports skipped and writes nothing when the output equals the local file', async () => {
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('upstream + overlay');
+    vi.mocked(runTransform).mockResolvedValue({ ok: true, content: 'upstream + overlay' });
+
+    const summary = await syncFiles(inputs);
+
+    expect(summary.skipped).toHaveLength(1);
+    expect(summary.hasChanges).toBe(false);
+    expect(fs.writeFile).not.toHaveBeenCalled();
+    expect(runTransform).toHaveBeenCalledWith(rule, 'upstream', {
+      BOILERPLATE_SYNC_LOCAL_PATH: 'package.json',
+      BOILERPLATE_SYNC_SOURCE: 'owner/repo',
+      BOILERPLATE_SYNC_SOURCE_PATH: 'package.json',
+      BOILERPLATE_SYNC_REF: 'main',
+      BOILERPLATE_SYNC_RESOLVED_REF: 'main',
+      BOILERPLATE_SYNC_FILE_EXISTS: 'true',
+    });
+  });
+
+  it('writes the output when it differs from the local file', async () => {
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old');
+    vi.mocked(runTransform).mockResolvedValue({ ok: true, content: 'new' });
+
+    const summary = await syncFiles(inputs);
+
+    expect(summary.updated).toHaveLength(1);
+    expect(fs.writeFile).toHaveBeenCalledWith('package.json', 'new', 'utf-8');
+  });
+
+  it('creates a missing file from the output, telling the transform it does not exist', async () => {
+    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+    vi.mocked(runTransform).mockResolvedValue({ ok: true, content: 'new' });
+
+    const summary = await syncFiles(inputs);
+
+    expect(summary.created).toHaveLength(1);
+    expect(fs.writeFile).toHaveBeenCalledWith('package.json', 'new', 'utf-8');
+    expect(vi.mocked(runTransform).mock.calls[0][2]).toMatchObject({
+      BOILERPLATE_SYNC_FILE_EXISTS: 'false',
+    });
+  });
+
+  it('passes an empty ref when none is configured', async () => {
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('same');
+    vi.mocked(runTransform).mockResolvedValue({ ok: true, content: 'same' });
+    fetchReturning('upstream', 'develop');
+
+    await syncFiles({
+      ...inputs,
+      sources: [{ source: 'owner/repo', default_files: ['package.json'] }],
+    });
+
+    expect(vi.mocked(runTransform).mock.calls[0][2]).toMatchObject({
+      BOILERPLATE_SYNC_REF: '',
+      BOILERPLATE_SYNC_RESOLVED_REF: 'develop',
+    });
+  });
+
+  it('does not run the transform when the file is missing and create-missing is false', async () => {
+    vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT'));
+
+    const summary = await syncFiles({ ...inputs, createMissing: false });
+
+    expect(summary.skipped).toHaveLength(1);
+    expect(runTransform).not.toHaveBeenCalled();
+  });
+
+  it('marks the file failed and leaves it untouched when the transform fails', async () => {
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old');
+    vi.mocked(runTransform).mockResolvedValue({
+      ok: false,
+      error: "transform 'package.json' exited with code 3: bad input",
+    });
+
+    const summary = await syncFiles(inputs);
+
+    expect(summary.failed).toHaveLength(1);
+    expect(summary.failed[0].error).toBe(
+      "transform 'package.json' exited with code 3: bad input"
+    );
+    expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('stops after a failed transform when fail-on-error is true', async () => {
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old');
+    vi.mocked(runTransform).mockResolvedValue({ ok: false, error: 'boom' });
+
+    const summary = await syncFiles({
+      ...inputs,
+      failOnError: true,
+      sources: [{ source: 'owner/repo', default_files: ['package.json', 'README.md'] }],
+    });
+
+    expect(summary.total).toBe(1);
+    expect(summary.failed).toHaveLength(1);
+  });
+
+  it('leaves files that no key matches alone', async () => {
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old');
+    vi.mocked(runTransform).mockResolvedValue({ ok: true, content: 'new' });
+
+    const summary = await syncFiles({
+      ...inputs,
+      sources: [{ source: 'owner/repo', default_files: ['package.json', 'README.md'] }],
+    });
+
+    expect(runTransform).toHaveBeenCalledTimes(1);
+    expect(summary.updated).toHaveLength(2);
+    expect(fs.writeFile).toHaveBeenCalledWith('README.md', 'upstream', 'utf-8');
+  });
+});
+
+describe('syncFiles with pre-sync', () => {
+  const inputs: ActionInputs = {
+    sources: [{ source: 'owner/repo', ref: 'main', default_files: ['test.ts'] }],
+    githubToken: 'gh-token',
+    createMissing: true,
+    failOnError: false,
+    hooks: withHooks({ preSync: ['test -f lock'], postSync: ['npm test'] }),
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('mock content');
+  });
+
+  it('runs pre-sync once, before fetching any content, and not post-sync', async () => {
+    await syncFiles(inputs);
+
+    expect(runHookCommands).toHaveBeenCalledTimes(1);
+    expect(runHookCommands).toHaveBeenCalledWith('pre-sync', ['test -f lock'], {});
+    expect(vi.mocked(runHookCommands).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(createGitHubSource).mock.invocationCallOrder[0]
+    );
+  });
+
+  it('aborts before fetching any content or writing when pre-sync fails', async () => {
+    vi.mocked(runHookCommands).mockRejectedValue(
+      new HookError('pre-sync command 1 of 1 exited with code 1: test -f lock')
+    );
+
+    await expect(syncFiles(inputs)).rejects.toThrow(HookError);
+    expect(createGitHubSource).not.toHaveBeenCalled();
+    expect(fs.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('runs no hook when none is configured', async () => {
+    await syncFiles({ ...inputs, hooks: undefined });
+
+    expect(runHookCommands).not.toHaveBeenCalled();
+    expect(runTransform).not.toHaveBeenCalled();
+  });
+});
+
+describe('syncFiles hook checks after glob expansion', () => {
+  const globInputs = (hooks: HooksConfig): ActionInputs => ({
+    sources: [{ source: 'owner/repo', ref: 'main', default_files: ['scripts/**', 'docs/*.md'] }],
+    githubToken: 'gh-token',
+    createMissing: true,
+    failOnError: false,
+    hooks,
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(isGlobPattern).mockImplementation((pattern: string) => pattern.includes('*'));
+    vi.mocked(listFilesMatchingGlob).mockImplementation(async (_o, _r, pattern) =>
+      pattern === 'scripts/**' ? ['scripts/fmt.sh'] : ['docs/a.md', 'docs/b.md']
+    );
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.readFile).mockResolvedValue('old');
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+  });
+
+  it('runs pre-sync after glob expansion and the hook checks', async () => {
+    await syncFiles(globInputs(withHooks({ preSync: ['test -f lock'] })));
+
+    const preSync = vi.mocked(runHookCommands).mock.invocationCallOrder[0];
+    expect(preSync).toBeGreaterThan(vi.mocked(listFilesMatchingGlob).mock.invocationCallOrder[1]);
+    expect(preSync).toBeLessThan(vi.mocked(createGitHubSource).mock.invocationCallOrder[0]);
+  });
+
+  it('rejects a pre-sync command that names a glob-expanded path before it runs', async () => {
+    // A previous sync left scripts/fmt.sh, matched by scripts/**, in the workspace
+    const sync = syncFiles(globInputs(withHooks({ preSync: ['bash scripts/fmt.sh'] })));
+
+    await expect(sync).rejects.toThrow(/hooks\.pre-sync.*'scripts\/fmt\.sh'/);
+    expect(runHookCommands).not.toHaveBeenCalled();
+    expect(createGitHubSource).not.toHaveBeenCalled();
+  });
+
+  it('fails closed, running no hook, when a glob fails to expand', async () => {
+    vi.mocked(listFilesMatchingGlob).mockRejectedValue(new Error('tree API unavailable'));
+
+    const sync = syncFiles(globInputs(withHooks({ preSync: ['bash scripts/fmt.sh'] })));
+
+    await expect(sync).rejects.toThrow(ConfigError);
+    await expect(sync).rejects.toThrow(/'scripts\/\*\*'.*did not expand/);
+    expect(runHookCommands).not.toHaveBeenCalled();
+    expect(createGitHubSource).not.toHaveBeenCalled();
+  });
+
+  it('does not mistake a concrete bracketed file for an unexpanded glob', async () => {
+    vi.mocked(isGlobPattern).mockImplementation((pattern: string) => /[*?[]/.test(pattern));
+    vi.mocked(listFilesMatchingGlob).mockImplementation(async (_o, _r, pattern) =>
+      pattern === 'scripts/**' ? ['scripts/fmt[1].sh'] : ['docs/a.md']
+    );
+
+    const summary = await syncFiles({
+      ...globInputs(withHooks({ postSync: ['npm test'] })),
+      sources: [
+        { source: 'owner/repo', ref: 'main', default_files: ['scripts/**', 'docs/*.md'] },
+        { source: 'owner/repo', file_pairs: [{ local_path: 'conf[1].json', source_path: 'conf.json' }] },
+      ],
+    });
+
+    expect(summary.total).toBe(3);
+    expect(createGitHubSource).toHaveBeenCalledTimes(3);
+  });
+
+  it('fails closed when a glob matches no file', async () => {
+    vi.mocked(listFilesMatchingGlob).mockImplementation(async (_o, _r, pattern) =>
+      pattern === 'scripts/**' ? [] : ['docs/a.md']
+    );
+
+    await expect(
+      syncFiles(globInputs(withHooks({ postSync: ['npm test'] })))
+    ).rejects.toThrow(/'scripts\/\*\*'.*did not expand/);
+    expect(createGitHubSource).not.toHaveBeenCalled();
+  });
+
+  it('rejects a hook whose unquoted glob would expand to a synced path', async () => {
+    const sync = syncFiles(globInputs(withHooks({ postSync: ['bash scripts/*.sh'] })));
+
+    await expect(sync).rejects.toThrow(/hooks\.post-sync.*'scripts\/fmt\.sh'/);
+  });
+
+  it('rejects a hook that names an expanded path, before fetching any content', async () => {
+    const sync = syncFiles(globInputs(withHooks({ postSync: ['./scripts/fmt.sh'] })));
+
+    await expect(sync).rejects.toThrow(ConfigError);
+    await expect(sync).rejects.toThrow(/hooks\.post-sync.*'scripts\/fmt\.sh'/);
+    expect(createGitHubSource).not.toHaveBeenCalled();
+  });
+
+  it('rejects a file matched by two transform keys, before fetching any content', async () => {
+    const hooks = withHooks({
+      transform: [
+        { pattern: 'docs/*.md', command: 'cat' },
+        { pattern: 'docs/a.md', command: 'cat' },
+      ],
+    });
+
+    await expect(syncFiles(globInputs(hooks))).rejects.toThrow(/more than one key/);
+    expect(createGitHubSource).not.toHaveBeenCalled();
+    expect(runTransform).not.toHaveBeenCalled();
+  });
+
+  it('transforms each file a glob key matches', async () => {
+    const rule = { pattern: 'docs/*.md', command: 'sed s/a/b/' };
+    vi.mocked(runTransform).mockResolvedValue({ ok: true, content: 'new' });
+
+    await syncFiles(globInputs(withHooks({ transform: [rule] })));
+
+    expect(runTransform).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(runTransform).mock.calls.map((call) => call[2].BOILERPLATE_SYNC_LOCAL_PATH)).toEqual([
+      'docs/a.md',
+      'docs/b.md',
+    ]);
+  });
+});
+
+describe('runPostSync', () => {
+  const summary = (overrides: Partial<SyncSummary>): SyncSummary => ({
+    updated: [],
+    created: [],
+    skipped: [],
+    failed: [],
+    total: 0,
+    hasChanges: false,
+    allFailed: false,
+    ...overrides,
+  });
+  const failedResult = {
+    config: { local_path: 'a', source_path: 'a', source: 'o/r', origin: 'default_files' as const },
+    status: 'failed' as const,
+    error: 'boom',
+  };
+  const inputs = (failOnError: boolean, postSync: string[]): ActionInputs => ({
+    sources: [],
+    githubToken: 'gh-token',
+    createMissing: true,
+    failOnError,
+    hooks: withHooks({ postSync }),
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('runs post-sync with BOILERPLATE_SYNC_HAS_CHANGES', async () => {
+    await expect(runPostSync(inputs(false, ['npm test']), summary({ hasChanges: true }))).resolves.toBe(true);
+    expect(runHookCommands).toHaveBeenCalledWith('post-sync', ['npm test'], {
+      BOILERPLATE_SYNC_HAS_CHANGES: 'true',
+    });
+
+    await runPostSync(inputs(false, ['npm test']), summary({ hasChanges: false }));
+    expect(runHookCommands).toHaveBeenLastCalledWith('post-sync', ['npm test'], {
+      BOILERPLATE_SYNC_HAS_CHANGES: 'false',
+    });
+  });
+
+  it('runs post-sync after failed files when fail-on-error is false', async () => {
+    await runPostSync(inputs(false, ['npm test']), summary({ failed: [failedResult] }));
+
+    expect(runHookCommands).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips post-sync when fail-on-error is true and a file failed', async () => {
+    await expect(
+      runPostSync(inputs(true, ['npm test']), summary({ failed: [failedResult] }))
+    ).resolves.toBe(false);
+    expect(runHookCommands).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when post-sync is not configured', async () => {
+    await expect(runPostSync(inputs(false, []), summary({}))).resolves.toBe(false);
+    await expect(
+      runPostSync({ ...inputs(false, []), hooks: undefined }, summary({}))
+    ).resolves.toBe(false);
+    expect(runHookCommands).not.toHaveBeenCalled();
+  });
+
+  it('propagates a post-sync failure', async () => {
+    vi.mocked(runHookCommands).mockRejectedValue(new HookError('post-sync failed'));
+
+    await expect(runPostSync(inputs(false, ['npm test']), summary({}))).rejects.toThrow(HookError);
   });
 });

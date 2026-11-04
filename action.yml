@@ -31,6 +31,18 @@ inputs:
     description: Fail the action if any file sync fails
     required: false
     default: 'false'
+  hooks:
+    description: |
+      YAML mapping of lifecycle hooks. Each command runs in bash from the workspace:
+        - pre-sync: (optional) command or list of commands, run once before any file is fetched
+        - transform: (optional) map of local path or glob to a command that reads the fetched
+          content on stdin and prints the content to keep; runs before the unchanged check
+        - post-sync: (optional) command or list of commands, run once after all files are processed
+      Hook processes get none of this action's inputs or tokens in their environment, and may not
+      name a synced path. Check out with persist-credentials: false when you use hooks.
+      See the README's Hooks section.
+    required: false
+    default: ''
 
 outputs:
   has-changes:
