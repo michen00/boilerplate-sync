@@ -99,6 +99,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Test action (smoke test)
         uses: ./
@@ -190,3 +192,140 @@ jobs:
             exit 1
           fi
           rm .ci-test-synced-license
+
+      # Exercise the committed bundle through action.yml, including hooks
+      # rejected before any fetch and transforms compared before any write.
+      - name: Prepare hook smoke fixtures
+        run: |
+          mkdir -p .ci-test-hooks
+          printf '%s\n' 'touch .ci-test-hooks/bypass-ran' > .ci-test-hooks/merge.sh
+          cp .ci-test-hooks/merge.sh .ci-test-hooks/merge.expected
+
+      - name: Reject an ANSI-C encoded synced path
+        id: hooks-ansi
+        uses: ./
+        continue-on-error: true
+        with:
+          sources: |
+            - source: ${{ github.repository }}
+              ref: ${{ github.sha }}
+              file_pairs:
+                - local_path: .ci-test-hooks/merge.sh
+                  source_path: README.md
+          github-token: ${{ github.token }}
+          fail-on-error: 'true'
+          hooks: |
+            pre-sync: bash $'.ci-test-hooks/\x6derge.sh'
+
+      - name: Reject a synced path in a +c shell command
+        id: hooks-shell
+        uses: ./
+        continue-on-error: true
+        with:
+          sources: |
+            - source: ${{ github.repository }}
+              ref: ${{ github.sha }}
+              file_pairs:
+                - local_path: .ci-test-hooks/merge.sh
+                  source_path: README.md
+          github-token: ${{ github.token }}
+          fail-on-error: 'true'
+          hooks: |
+            pre-sync: bash +c 'bash .ci-test-hooks/merge.sh'
+
+      - name: Sync with valid hooks and a transform
+        id: hooks-first
+        uses: ./
+        with:
+          sources: |
+            - source: ${{ github.repository }}
+              ref: ${{ github.sha }}
+              file_pairs:
+                - local_path: .ci-test-hooks/README.md
+                  source_path: README.md
+          github-token: ${{ github.token }}
+          fail-on-error: 'true'
+          hooks: |
+            pre-sync: printf '%s\n' "$BOILERPLATE_SYNC_HOOK" >> .ci-test-hooks/hooks-ran
+            transform:
+              .ci-test-hooks/README.md: |
+                printf 'local overlay: '
+                cat
+            post-sync: |
+              printf '%s:%s\n' "$BOILERPLATE_SYNC_HOOK" "$BOILERPLATE_SYNC_HAS_CHANGES" \
+                >> .ci-test-hooks/hooks-ran
+
+      - name: Repeat the transformed sync without changes
+        id: hooks-repeat
+        uses: ./
+        with:
+          sources: |
+            - source: ${{ github.repository }}
+              ref: ${{ github.sha }}
+              file_pairs:
+                - local_path: .ci-test-hooks/README.md
+                  source_path: README.md
+          github-token: ${{ github.token }}
+          fail-on-error: 'true'
+          hooks: |
+            pre-sync: printf '%s\n' "$BOILERPLATE_SYNC_HOOK" >> .ci-test-hooks/hooks-ran
+            transform:
+              .ci-test-hooks/README.md: |
+                printf 'local overlay: '
+                cat
+            post-sync: |
+              printf '%s:%s\n' "$BOILERPLATE_SYNC_HOOK" "$BOILERPLATE_SYNC_HAS_CHANGES" \
+                >> .ci-test-hooks/hooks-ran
+
+      - name: Verify hook rejections, transformed content and outputs
+        env:
+          ANSI_OUTCOME: ${{ steps.hooks-ansi.outcome }}
+          ANSI_OUTPUTS: ${{ toJSON(steps.hooks-ansi.outputs) }}
+          SHELL_OUTCOME: ${{ steps.hooks-shell.outcome }}
+          SHELL_OUTPUTS: ${{ toJSON(steps.hooks-shell.outputs) }}
+          FIRST_OUTPUTS: ${{ toJSON(steps.hooks-first.outputs) }}
+          REPEAT_OUTPUTS: ${{ toJSON(steps.hooks-repeat.outputs) }}
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+
+          for (const scenario of ['ANSI', 'SHELL']) {
+            assert.equal(
+              process.env[`${scenario}_OUTCOME`], 'failure', `${scenario} must be rejected`
+            );
+            const outputs = JSON.parse(process.env[`${scenario}_OUTPUTS`]);
+            assert.ok(
+              Object.values(outputs).every(value => value === ''),
+              `${scenario} must set no outputs`
+            );
+          }
+          assert.equal(
+            fs.existsSync('.ci-test-hooks/bypass-ran'), false, 'a rejected hook must not run'
+          );
+          assert.equal(
+            fs.readFileSync('.ci-test-hooks/merge.sh', 'utf8'),
+            fs.readFileSync('.ci-test-hooks/merge.expected', 'utf8'),
+            'a rejected configuration must leave synced files untouched'
+          );
+
+          const first = JSON.parse(process.env.FIRST_OUTPUTS);
+          const repeat = JSON.parse(process.env.REPEAT_OUTPUTS);
+          for (const [outputs, changed, updated, skipped] of [
+            [first, 'true', '1', '0'],
+            [repeat, 'false', '0', '1'],
+          ]) {
+            assert.equal(outputs['has-changes'], changed);
+            assert.equal(outputs['updated-count'], updated);
+            assert.equal(outputs['skipped-count'], skipped);
+            assert.equal(outputs['failed-count'], '0');
+          }
+          assert.equal(
+            fs.readFileSync('.ci-test-hooks/README.md', 'utf8'),
+            'local overlay: ' + fs.readFileSync('README.md', 'utf8')
+          );
+          assert.equal(
+            fs.readFileSync('.ci-test-hooks/hooks-ran', 'utf8'),
+            'pre-sync\npost-sync:true\npre-sync\npost-sync:false\n'
+          );
+          NODE
