@@ -28,7 +28,7 @@ jobs:
     steps:
       - name: Consume @v1 (floating alias the README advertises)
         id: v1
-        uses: michen00/boilerplate-sync@v1
+        uses: michen00/boilerplate-sync@0e9141c0e4cba19be30565e78b0afdb29e470635 # v1.1.0
         with:
           sources: |
             - source: actions/checkout
@@ -71,7 +71,7 @@ jobs:
 
       - name: Consume @v1.0.0 (immutable tag)
         id: v100
-        uses: michen00/boilerplate-sync@v1.0.0
+        uses: michen00/boilerplate-sync@448458ef54cd69b79dd5be45e1b516f9a138052d # v1.0.0
         with:
           sources: |
             - source: actions/checkout
@@ -117,7 +117,7 @@ jobs:
       # check the tag out and run it from a path.
       - name: Check out the released tag
         if: github.event_name == 'release'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.event.release.tag_name }}
