@@ -34,18 +34,18 @@ jobs:
           fi
       - name: Mint app token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Sync files
         id: sync
-        uses: michen00/boilerplate-sync@main
+        uses: ./
         with:
           sources: |
             - source: michen00/template
@@ -65,7 +65,7 @@ jobs:
         id: pr-body
         env:
           SYNC_SUMMARY: ${{ steps.sync.outputs.summary }}
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           result-encoding: string
           script: |

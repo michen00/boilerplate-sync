@@ -45,14 +45,14 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Checkout the release tag
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # refs/tags/ forces a tag ref -- checkout fails fast if the tag does
           # not exist, so a non-tag ref can never reach the attestation step.
           ref: refs/tags/${{ steps.ref.outputs.tag }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Build on the runtime the action targets (action.yml uses: node24,
           # package.json engines: >=24) so the provenance reflects a supported
@@ -79,6 +79,6 @@ jobs:
           fi
 
       - name: Attest build provenance for dist/index.js
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/index.js

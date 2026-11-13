@@ -43,11 +43,11 @@ jobs:
       # `if:` cannot read `secrets`, so the key's presence is exposed here.
       APP_KEY_SET: ${{ secrets.APP_PRIVATE_KEY != '' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Dependabot metadata
         if: github.event.pull_request.user.login == 'dependabot[bot]'
         id: dependabot
-        uses: dependabot/fetch-metadata@v3
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ env.GITHUB_TOKEN }}
       - name: Build
@@ -58,7 +58,7 @@ jobs:
           pip install --upgrade pre-commit
       - name: Cache pre-commit hooks
         id: cache-pre-commit-hooks
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         env:
           CACHE_NUMBER: 0
         with:
@@ -93,7 +93,7 @@ jobs:
       - name: Mint app token
         id: app-token
         if: vars.APP_CLIENT_ID != '' && env.APP_KEY_SET == 'true'
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -111,7 +111,7 @@ jobs:
       # The default branch, in a directory apart from the pull request's checkout above.
       # The next step fetches the pull request's commits into it for `git merge-tree`.
       - name: Check out the default branch's history
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: default-branch-history
