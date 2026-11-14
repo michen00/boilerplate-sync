@@ -10,6 +10,11 @@ updates:
         update-types: [major]
       minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # typescript-eslint 8.x accepts typescript <6.1.0 only, and TypeScript 7.0
+      # ships no JavaScript API (typescript-eslint#10940).
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
     cooldown:
       default-days: 7
   - package-ecosystem: github-actions
