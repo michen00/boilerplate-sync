@@ -89,7 +89,7 @@ jobs:
           else
             echo "level=warning" >> "$GITHUB_OUTPUT"
           fi
-      # Only the dist commit uses this token.
+      # The dist commit and the disarm use this token.
       - name: Mint app token
         id: app-token
         if: vars.APP_CLIENT_ID != '' && env.APP_KEY_SET == 'true'
@@ -143,7 +143,7 @@ jobs:
           #   whatever an App or `GITHUB_TOKEN` creates through its API.
           # Every check reads the one head commit that a trusted verdict names in `head`,
           # which must be the head this run's event brought or the commit this run pushed.
-          # Fails closed: a failed query or fetch leaves `trusted` unset; later steps skip.
+          # Fails closed: a failed query or fetch leaves `trusted` unset.
           set -euo pipefail
           for attempt in $(seq 1 30); do
             head=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" --jq '.head.sha')
@@ -430,3 +430,21 @@ jobs:
         run: |
           echo "::notice::Enabling auto-merge for PR #$PR_NUMBER"
           gh pr merge --auto --squash --match-head-commit "$VERIFIED_HEAD" "$PR_NUMBER"
+
+      # Turns off what an earlier run armed when this run errored, was cancelled, or did
+      # not trust the head. A hold for eligibility leaves it: a person may have armed the
+      # update. A label change by the same actor cancels a run on the same head, too.
+      - name: Disarm auto-merge unless this run vouched for the head
+        if: always() && steps.provenance.outputs.trusted != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          # Named here, as a run that failed early may have no checkout to infer it from.
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          armed=$(gh pr view "$PR_NUMBER" --json autoMergeRequest \
+            --jq '.autoMergeRequest != null')
+          if [ "$armed" = true ]; then
+            gh pr merge --disable-auto "$PR_NUMBER"
+            echo "::warning::auto-merge disarmed: this run did not vouch for the head."
+          fi
