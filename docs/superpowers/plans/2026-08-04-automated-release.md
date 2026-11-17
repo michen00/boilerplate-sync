@@ -12,6 +12,22 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-04-automated-release-design.md`
 
+## Contents
+
+- [Global Constraints](#global-constraints)
+- [File Structure](#file-structure)
+- Tasks
+  - [Task 1: Exempt `CHANGELOG.md` from formatting hooks and regenerate it](#task-1-exempt-changelogmd-from-formatting-hooks-and-regenerate-it)
+  - [Task 2: Add release-please configuration](#task-2-add-release-please-configuration)
+  - [Task 3: Add the release workflow's PR-maintenance job](#task-3-add-the-release-workflows-pr-maintenance-job)
+  - [Task 4: Tag, publish, and refresh README pins](#task-4-tag-publish-and-refresh-readme-pins)
+  - [Task 5: Remove the git-cliff changelog machinery](#task-5-remove-the-git-cliff-changelog-machinery)
+  - [Task 6: Rescope the tag ruleset and verify the first real release](#task-6-rescope-the-tag-ruleset-and-verify-the-first-real-release)
+- [Notes for the implementer](#notes-for-the-implementer)
+- [Post-review revision (supersedes Task 3 Step 1 and Task 4 Step 3)](#post-review-revision-supersedes-task-3-step-1-and-task-4-step-3)
+  - [Documentation the deletions and the ruleset rescope left stale](#documentation-the-deletions-and-the-ruleset-rescope-left-stale)
+  - [Task 6 addition: verify the _second_ release](#task-6-addition-verify-the-second-release)
+
 ## Global Constraints
 
 - **Repo:** `michen00/boilerplate-sync`. Default branch `main`.
