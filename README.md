@@ -8,6 +8,31 @@
 
 A GitHub Action that keeps your project boilerplate files in sync with another repository.
 
+## Contents
+
+- [Features](#features)
+- [Inspiration](#inspiration)
+- [Quick Start](#quick-start)
+- [Inputs](#inputs)
+  - [Sources Configuration Format](#sources-configuration-format)
+  - [Glob Patterns](#glob-patterns)
+  - [Hooks](#hooks)
+- [Outputs](#outputs)
+- [Examples](#examples)
+  - [Real Working Example](#real-working-example)
+  - [Basic Usage](#basic-usage)
+  - [Template sync authentication and file selection](#template-sync-authentication-and-file-selection)
+  - [Private Source Repository](#private-source-repository)
+  - [Strict Mode](#strict-mode)
+  - [Don't Create Missing Files](#dont-create-missing-files)
+  - [Using Outputs](#using-outputs)
+- [How It Works](#how-it-works)
+- [Permissions](#permissions)
+- [Security](#security)
+- [Limitations](#limitations)
+- [⚠️ Important Warning](#%EF%B8%8F-important-warning)
+- [Documentation](#documentation-)
+
 ## Features
 
 - 🔄 **Automatic syncing** - Keep project files up-to-date with boilerplate sources

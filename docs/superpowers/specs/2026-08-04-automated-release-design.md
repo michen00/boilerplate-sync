@@ -3,6 +3,31 @@
 Status: approved, not yet implemented
 Date: 2026-08-04
 
+## Contents
+
+- [Problem](#problem)
+- [Goals](#goals)
+- [Non-goals](#non-goals)
+- [Chosen approach](#chosen-approach)
+  - [Why we pre-create the tag, and why release-please still publishes](#why-we-pre-create-the-tag-and-why-release-please-still-publishes)
+  - [Manifest mode: omit `release-type`](#manifest-mode-omit-release-type)
+  - [Idempotency](#idempotency)
+  - [Verified behaviour against real history](#verified-behaviour-against-real-history)
+- [Authorization and ruleset changes](#authorization-and-ruleset-changes)
+  - [Token requirements](#token-requirements)
+- [Integrity analysis](#integrity-analysis)
+- [Files](#files)
+  - [Added](#added)
+  - [Changed](#changed)
+  - [Removed](#removed)
+- [Blocker: two formatting hooks reject release-please output](#blocker-two-formatting-hooks-reject-release-please-output)
+- [One-time migration](#one-time-migration)
+  - [Regenerating the changelog](#regenerating-the-changelog)
+- [Failure modes](#failure-modes)
+- [Testing](#testing)
+- [Human prerequisites](#human-prerequisites)
+- [Open items](#open-items)
+
 ## Problem
 
 Releasing `michen00/boilerplate-sync` is five manual steps with no automation:
