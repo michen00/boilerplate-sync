@@ -30,6 +30,7 @@ The project has defined a [code of conduct](https://github.com/michen00/.github/
     - [Dev shortcuts](#dev-shortcuts)
     - [Committing your changes](#committing-your-changes)
     - [Before opening a Pull Request](#before-opening-a-pull-request)
+- [Releasing](#releasing)
 
 ## I have a question
 
@@ -149,6 +150,20 @@ git push origin <branch name>
 - If you link to a file from a pull request's description or comments, use the link on your branch (`https://github.com/michen00/boilerplate-sync/blob/<branch>/<path>`) rather than one pinned to a commit. While the pull request is open, that link shows the latest version, and when it merges, `freeze-pr-links.yml` points it at the branch's last commit so it keeps working after the branch is deleted
 
 And finally, when you are satisfied with your changes, open a new PR.
+
+## Releasing
+
+Releases are automated by [`release.yml`](.github/workflows/release.yml). When a `feat` or `fix` commit, or a breaking change, lands on `main`, release-please opens or updates a `chore(main): release X.Y.Z` pull request that bumps the version and adds the `CHANGELOG.md` section. Merging that pull request is the only manual step: it tags `vX.Y.Z`, moves `v1` to the same commit, and publishes the GitHub Release. Don't create tags or releases by hand, and don't edit `CHANGELOG.md`.
+
+To preview the next release pull request without opening it:
+
+```sh
+npx release-please release-pr --dry-run --repo-url=michen00/boilerplate-sync --token "$(gh auth token)"
+```
+
+Leave out `--release-type`: like the action's input of the same name, it makes release-please ignore `release-please-config.json`.
+
+If a release run fails partway, for example after pushing the tag but before publishing the Release, run the workflow again with `gh workflow run release.yml`. It checks whether the version in `.release-please-manifest.json` already has a Release, and if not, finishes the missing steps.
 
 [issues]: https://github.com/michen00/boilerplate-sync/issues
 [issues_new]: https://github.com/michen00/boilerplate-sync/issues/new
