@@ -2283,7 +2283,7 @@ var require_timers = __commonJS({
     var fastTimers = [];
     var NOT_IN_LIST = -2;
     var TO_BE_CLEARED = -1;
-    var PENDING = 0;
+    var PENDING2 = 0;
     var ACTIVE = 1;
     function onTick() {
       fastNow += TICK_MS;
@@ -2291,7 +2291,7 @@ var require_timers = __commonJS({
       let len = fastTimers.length;
       while (idx < len) {
         const timer = fastTimers[idx];
-        if (timer._state === PENDING) {
+        if (timer._state === PENDING2) {
           timer._idleStart = fastNow - TICK_MS;
           timer._state = ACTIVE;
         } else if (timer._state === ACTIVE && fastNow >= timer._idleStart + timer._idleTimeout) {
@@ -2396,7 +2396,7 @@ var require_timers = __commonJS({
         if (!fastNowTimeout || fastTimers.length === 1) {
           refreshTimeout();
         }
-        this._state = PENDING;
+        this._state = PENDING2;
       }
       /**
        * The `clear` method cancels the timer, preventing it from executing.
@@ -3806,10 +3806,10 @@ var require_webidl = __commonJS({
       }
     };
     webidl.sequenceConverter = function(converter) {
-      return (V, prefix, argument, Iterable) => {
+      return (V, prefix2, argument, Iterable) => {
         if (webidl.util.Type(V) !== "Object") {
           throw webidl.errors.exception({
-            header: prefix,
+            header: prefix2,
             message: `${argument} (${webidl.util.Stringify(V)}) is not iterable.`
           });
         }
@@ -3818,7 +3818,7 @@ var require_webidl = __commonJS({
         let index = 0;
         if (method === void 0 || typeof method.next !== "function") {
           throw webidl.errors.exception({
-            header: prefix,
+            header: prefix2,
             message: `${argument} is not iterable.`
           });
         }
@@ -3827,16 +3827,16 @@ var require_webidl = __commonJS({
           if (done) {
             break;
           }
-          seq.push(converter(value, prefix, `${argument}[${index++}]`));
+          seq.push(converter(value, prefix2, `${argument}[${index++}]`));
         }
         return seq;
       };
     };
     webidl.recordConverter = function(keyConverter, valueConverter) {
-      return (O, prefix, argument) => {
+      return (O, prefix2, argument) => {
         if (webidl.util.Type(O) !== "Object") {
           throw webidl.errors.exception({
-            header: prefix,
+            header: prefix2,
             message: `${argument} ("${webidl.util.Type(O)}") is not an Object.`
           });
         }
@@ -3844,8 +3844,8 @@ var require_webidl = __commonJS({
         if (!types.isProxy(O)) {
           const keys2 = [...Object.getOwnPropertyNames(O), ...Object.getOwnPropertySymbols(O)];
           for (const key of keys2) {
-            const typedKey = keyConverter(key, prefix, argument);
-            const typedValue = valueConverter(O[key], prefix, argument);
+            const typedKey = keyConverter(key, prefix2, argument);
+            const typedValue = valueConverter(O[key], prefix2, argument);
             result[typedKey] = typedValue;
           }
           return result;
@@ -3854,8 +3854,8 @@ var require_webidl = __commonJS({
         for (const key of keys) {
           const desc = Reflect.getOwnPropertyDescriptor(O, key);
           if (desc?.enumerable) {
-            const typedKey = keyConverter(key, prefix, argument);
-            const typedValue = valueConverter(O[key], prefix, argument);
+            const typedKey = keyConverter(key, prefix2, argument);
+            const typedValue = valueConverter(O[key], prefix2, argument);
             result[typedKey] = typedValue;
           }
         }
@@ -3863,10 +3863,10 @@ var require_webidl = __commonJS({
       };
     };
     webidl.interfaceConverter = function(i) {
-      return (V, prefix, argument, opts) => {
+      return (V, prefix2, argument, opts) => {
         if (opts?.strict !== false && !(V instanceof i)) {
           throw webidl.errors.exception({
-            header: prefix,
+            header: prefix2,
             message: `Expected ${argument} ("${webidl.util.Stringify(V)}") to be an instance of ${i.name}.`
           });
         }
@@ -3874,14 +3874,14 @@ var require_webidl = __commonJS({
       };
     };
     webidl.dictionaryConverter = function(converters) {
-      return (dictionary, prefix, argument) => {
+      return (dictionary, prefix2, argument) => {
         const type = webidl.util.Type(dictionary);
         const dict = {};
         if (type === "Null" || type === "Undefined") {
           return dict;
         } else if (type !== "Object") {
           throw webidl.errors.exception({
-            header: prefix,
+            header: prefix2,
             message: `Expected ${dictionary} to be one of: Null, Undefined, Object.`
           });
         }
@@ -3890,7 +3890,7 @@ var require_webidl = __commonJS({
           if (required === true) {
             if (!Object.hasOwn(dictionary, key)) {
               throw webidl.errors.exception({
-                header: prefix,
+                header: prefix2,
                 message: `Missing required key "${key}".`
               });
             }
@@ -3901,10 +3901,10 @@ var require_webidl = __commonJS({
             value ??= defaultValue();
           }
           if (required || hasDefault || value !== void 0) {
-            value = converter(value, prefix, `${argument}.${key}`);
+            value = converter(value, prefix2, `${argument}.${key}`);
             if (options.allowedValues && !options.allowedValues.includes(value)) {
               throw webidl.errors.exception({
-                header: prefix,
+                header: prefix2,
                 message: `${value} is not an accepted type. Expected one of ${options.allowedValues.join(", ")}.`
               });
             }
@@ -3915,27 +3915,27 @@ var require_webidl = __commonJS({
       };
     };
     webidl.nullableConverter = function(converter) {
-      return (V, prefix, argument) => {
+      return (V, prefix2, argument) => {
         if (V === null) {
           return V;
         }
-        return converter(V, prefix, argument);
+        return converter(V, prefix2, argument);
       };
     };
-    webidl.converters.DOMString = function(V, prefix, argument, opts) {
+    webidl.converters.DOMString = function(V, prefix2, argument, opts) {
       if (V === null && opts?.legacyNullToEmptyString) {
         return "";
       }
       if (typeof V === "symbol") {
         throw webidl.errors.exception({
-          header: prefix,
+          header: prefix2,
           message: `${argument} is a symbol, which cannot be converted to a DOMString.`
         });
       }
       return String(V);
     };
-    webidl.converters.ByteString = function(V, prefix, argument) {
-      const x = webidl.converters.DOMString(V, prefix, argument);
+    webidl.converters.ByteString = function(V, prefix2, argument) {
+      const x = webidl.converters.DOMString(V, prefix2, argument);
       for (let index = 0; index < x.length; index++) {
         if (x.charCodeAt(index) > 255) {
           throw new TypeError(
@@ -3953,26 +3953,26 @@ var require_webidl = __commonJS({
     webidl.converters.any = function(V) {
       return V;
     };
-    webidl.converters["long long"] = function(V, prefix, argument) {
-      const x = webidl.util.ConvertToInt(V, 64, "signed", void 0, prefix, argument);
+    webidl.converters["long long"] = function(V, prefix2, argument) {
+      const x = webidl.util.ConvertToInt(V, 64, "signed", void 0, prefix2, argument);
       return x;
     };
-    webidl.converters["unsigned long long"] = function(V, prefix, argument) {
-      const x = webidl.util.ConvertToInt(V, 64, "unsigned", void 0, prefix, argument);
+    webidl.converters["unsigned long long"] = function(V, prefix2, argument) {
+      const x = webidl.util.ConvertToInt(V, 64, "unsigned", void 0, prefix2, argument);
       return x;
     };
-    webidl.converters["unsigned long"] = function(V, prefix, argument) {
-      const x = webidl.util.ConvertToInt(V, 32, "unsigned", void 0, prefix, argument);
+    webidl.converters["unsigned long"] = function(V, prefix2, argument) {
+      const x = webidl.util.ConvertToInt(V, 32, "unsigned", void 0, prefix2, argument);
       return x;
     };
-    webidl.converters["unsigned short"] = function(V, prefix, argument, opts) {
-      const x = webidl.util.ConvertToInt(V, 16, "unsigned", opts, prefix, argument);
+    webidl.converters["unsigned short"] = function(V, prefix2, argument, opts) {
+      const x = webidl.util.ConvertToInt(V, 16, "unsigned", opts, prefix2, argument);
       return x;
     };
-    webidl.converters.ArrayBuffer = function(V, prefix, argument, opts) {
+    webidl.converters.ArrayBuffer = function(V, prefix2, argument, opts) {
       if (webidl.util.Type(V) !== "Object" || !types.isAnyArrayBuffer(V)) {
         throw webidl.errors.conversionFailed({
-          prefix,
+          prefix: prefix2,
           argument: `${argument} ("${webidl.util.Stringify(V)}")`,
           types: ["ArrayBuffer"]
         });
@@ -3991,10 +3991,10 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.TypedArray = function(V, T, prefix, name, opts) {
+    webidl.converters.TypedArray = function(V, T, prefix2, name, opts) {
       if (webidl.util.Type(V) !== "Object" || !types.isTypedArray(V) || V.constructor.name !== T.name) {
         throw webidl.errors.conversionFailed({
-          prefix,
+          prefix: prefix2,
           argument: `${name} ("${webidl.util.Stringify(V)}")`,
           types: [T.name]
         });
@@ -4013,10 +4013,10 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.DataView = function(V, prefix, name, opts) {
+    webidl.converters.DataView = function(V, prefix2, name, opts) {
       if (webidl.util.Type(V) !== "Object" || !types.isDataView(V)) {
         throw webidl.errors.exception({
-          header: prefix,
+          header: prefix2,
           message: `${name} is not a DataView.`
         });
       }
@@ -4034,18 +4034,18 @@ var require_webidl = __commonJS({
       }
       return V;
     };
-    webidl.converters.BufferSource = function(V, prefix, name, opts) {
+    webidl.converters.BufferSource = function(V, prefix2, name, opts) {
       if (types.isAnyArrayBuffer(V)) {
-        return webidl.converters.ArrayBuffer(V, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.ArrayBuffer(V, prefix2, name, { ...opts, allowShared: false });
       }
       if (types.isTypedArray(V)) {
-        return webidl.converters.TypedArray(V, V.constructor, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.TypedArray(V, V.constructor, prefix2, name, { ...opts, allowShared: false });
       }
       if (types.isDataView(V)) {
-        return webidl.converters.DataView(V, prefix, name, { ...opts, allowShared: false });
+        return webidl.converters.DataView(V, prefix2, name, { ...opts, allowShared: false });
       }
       throw webidl.errors.conversionFailed({
-        prefix,
+        prefix: prefix2,
         argument: `${name} ("${webidl.util.Stringify(V)}")`,
         types: ["BufferSource"]
       });
@@ -5039,31 +5039,31 @@ var require_formdata = __commonJS({
       }
       append(name, value, filename = void 0) {
         webidl.brandCheck(this, _FormData);
-        const prefix = "FormData.append";
-        webidl.argumentLengthCheck(arguments, 2, prefix);
+        const prefix2 = "FormData.append";
+        webidl.argumentLengthCheck(arguments, 2, prefix2);
         if (arguments.length === 3 && !isBlobLike(value)) {
           throw new TypeError(
             "Failed to execute 'append' on 'FormData': parameter 2 is not of type 'Blob'"
           );
         }
-        name = webidl.converters.USVString(name, prefix, "name");
-        value = isBlobLike(value) ? webidl.converters.Blob(value, prefix, "value", { strict: false }) : webidl.converters.USVString(value, prefix, "value");
-        filename = arguments.length === 3 ? webidl.converters.USVString(filename, prefix, "filename") : void 0;
+        name = webidl.converters.USVString(name, prefix2, "name");
+        value = isBlobLike(value) ? webidl.converters.Blob(value, prefix2, "value", { strict: false }) : webidl.converters.USVString(value, prefix2, "value");
+        filename = arguments.length === 3 ? webidl.converters.USVString(filename, prefix2, "filename") : void 0;
         const entry = makeEntry(name, value, filename);
         this[kState].push(entry);
       }
       delete(name) {
         webidl.brandCheck(this, _FormData);
-        const prefix = "FormData.delete";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
+        const prefix2 = "FormData.delete";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        name = webidl.converters.USVString(name, prefix2, "name");
         this[kState] = this[kState].filter((entry) => entry.name !== name);
       }
       get(name) {
         webidl.brandCheck(this, _FormData);
-        const prefix = "FormData.get";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
+        const prefix2 = "FormData.get";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        name = webidl.converters.USVString(name, prefix2, "name");
         const idx = this[kState].findIndex((entry) => entry.name === name);
         if (idx === -1) {
           return null;
@@ -5072,30 +5072,30 @@ var require_formdata = __commonJS({
       }
       getAll(name) {
         webidl.brandCheck(this, _FormData);
-        const prefix = "FormData.getAll";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
+        const prefix2 = "FormData.getAll";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        name = webidl.converters.USVString(name, prefix2, "name");
         return this[kState].filter((entry) => entry.name === name).map((entry) => entry.value);
       }
       has(name) {
         webidl.brandCheck(this, _FormData);
-        const prefix = "FormData.has";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        name = webidl.converters.USVString(name, prefix, "name");
+        const prefix2 = "FormData.has";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        name = webidl.converters.USVString(name, prefix2, "name");
         return this[kState].findIndex((entry) => entry.name === name) !== -1;
       }
       set(name, value, filename = void 0) {
         webidl.brandCheck(this, _FormData);
-        const prefix = "FormData.set";
-        webidl.argumentLengthCheck(arguments, 2, prefix);
+        const prefix2 = "FormData.set";
+        webidl.argumentLengthCheck(arguments, 2, prefix2);
         if (arguments.length === 3 && !isBlobLike(value)) {
           throw new TypeError(
             "Failed to execute 'set' on 'FormData': parameter 2 is not of type 'Blob'"
           );
         }
-        name = webidl.converters.USVString(name, prefix, "name");
-        value = isBlobLike(value) ? webidl.converters.Blob(value, prefix, "name", { strict: false }) : webidl.converters.USVString(value, prefix, "name");
-        filename = arguments.length === 3 ? webidl.converters.USVString(filename, prefix, "name") : void 0;
+        name = webidl.converters.USVString(name, prefix2, "name");
+        value = isBlobLike(value) ? webidl.converters.Blob(value, prefix2, "name", { strict: false }) : webidl.converters.USVString(value, prefix2, "name");
+        filename = arguments.length === 3 ? webidl.converters.USVString(filename, prefix2, "name") : void 0;
         const entry = makeEntry(name, value, filename);
         const idx = this[kState].findIndex((entry2) => entry2.name === name);
         if (idx !== -1) {
@@ -5492,7 +5492,7 @@ var require_body = __commonJS({
         source = new Uint8Array(object.buffer.slice(object.byteOffset, object.byteOffset + object.byteLength));
       } else if (util.isFormDataLike(object)) {
         const boundary = `----formdata-undici-0${`${random(1e11)}`.padStart(11, "0")}`;
-        const prefix = `--${boundary}\r
+        const prefix2 = `--${boundary}\r
 Content-Disposition: form-data`;
         const escape2 = (str) => str.replace(/\n/g, "%0A").replace(/\r/g, "%0D").replace(/"/g, "%22");
         const normalizeLinefeeds = (value) => value.replace(/\r?\n|\r/g, "\r\n");
@@ -5502,14 +5502,14 @@ Content-Disposition: form-data`;
         let hasUnknownSizeValue = false;
         for (const [name, value] of object) {
           if (typeof value === "string") {
-            const chunk2 = textEncoder.encode(prefix + `; name="${escape2(normalizeLinefeeds(name))}"\r
+            const chunk2 = textEncoder.encode(prefix2 + `; name="${escape2(normalizeLinefeeds(name))}"\r
 \r
 ${normalizeLinefeeds(value)}\r
 `);
             blobParts.push(chunk2);
             length += chunk2.byteLength;
           } else {
-            const chunk2 = textEncoder.encode(`${prefix}; name="${escape2(normalizeLinefeeds(name))}"` + (value.name ? `; filename="${escape2(value.name)}"` : "") + `\r
+            const chunk2 = textEncoder.encode(`${prefix2}; name="${escape2(normalizeLinefeeds(name))}"` + (value.name ? `; filename="${escape2(value.name)}"` : "") + `\r
 Content-Type: ${value.type || "application/octet-stream"}\r
 \r
 `);
@@ -12177,17 +12177,17 @@ var require_headers = __commonJS({
       append(name, value) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 2, "Headers.append");
-        const prefix = "Headers.append";
-        name = webidl.converters.ByteString(name, prefix, "name");
-        value = webidl.converters.ByteString(value, prefix, "value");
+        const prefix2 = "Headers.append";
+        name = webidl.converters.ByteString(name, prefix2, "name");
+        value = webidl.converters.ByteString(value, prefix2, "value");
         return appendHeader(this, name, value);
       }
       // https://fetch.spec.whatwg.org/#dom-headers-delete
       delete(name) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.delete");
-        const prefix = "Headers.delete";
-        name = webidl.converters.ByteString(name, prefix, "name");
+        const prefix2 = "Headers.delete";
+        name = webidl.converters.ByteString(name, prefix2, "name");
         if (!isValidHeaderName(name)) {
           throw webidl.errors.invalidArgument({
             prefix: "Headers.delete",
@@ -12207,11 +12207,11 @@ var require_headers = __commonJS({
       get(name) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.get");
-        const prefix = "Headers.get";
-        name = webidl.converters.ByteString(name, prefix, "name");
+        const prefix2 = "Headers.get";
+        name = webidl.converters.ByteString(name, prefix2, "name");
         if (!isValidHeaderName(name)) {
           throw webidl.errors.invalidArgument({
-            prefix,
+            prefix: prefix2,
             value: name,
             type: "header name"
           });
@@ -12222,11 +12222,11 @@ var require_headers = __commonJS({
       has(name) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 1, "Headers.has");
-        const prefix = "Headers.has";
-        name = webidl.converters.ByteString(name, prefix, "name");
+        const prefix2 = "Headers.has";
+        name = webidl.converters.ByteString(name, prefix2, "name");
         if (!isValidHeaderName(name)) {
           throw webidl.errors.invalidArgument({
-            prefix,
+            prefix: prefix2,
             value: name,
             type: "header name"
           });
@@ -12237,19 +12237,19 @@ var require_headers = __commonJS({
       set(name, value) {
         webidl.brandCheck(this, _Headers);
         webidl.argumentLengthCheck(arguments, 2, "Headers.set");
-        const prefix = "Headers.set";
-        name = webidl.converters.ByteString(name, prefix, "name");
-        value = webidl.converters.ByteString(value, prefix, "value");
+        const prefix2 = "Headers.set";
+        name = webidl.converters.ByteString(name, prefix2, "name");
+        value = webidl.converters.ByteString(value, prefix2, "value");
         value = headerValueNormalize(value);
         if (!isValidHeaderName(name)) {
           throw webidl.errors.invalidArgument({
-            prefix,
+            prefix: prefix2,
             value: name,
             type: "header name"
           });
         } else if (!isValidHeaderValue(value)) {
           throw webidl.errors.invalidArgument({
-            prefix,
+            prefix: prefix2,
             value,
             type: "header value"
           });
@@ -12329,7 +12329,7 @@ var require_headers = __commonJS({
         enumerable: false
       }
     });
-    webidl.converters.HeadersInit = function(V, prefix, argument) {
+    webidl.converters.HeadersInit = function(V, prefix2, argument) {
       if (webidl.util.Type(V) === "Object") {
         const iterator2 = Reflect.get(V, Symbol.iterator);
         if (!util.types.isProxy(V) && iterator2 === Headers2.prototype.entries) {
@@ -12339,9 +12339,9 @@ var require_headers = __commonJS({
           }
         }
         if (typeof iterator2 === "function") {
-          return webidl.converters["sequence<sequence<ByteString>>"](V, prefix, argument, iterator2.bind(V));
+          return webidl.converters["sequence<sequence<ByteString>>"](V, prefix2, argument, iterator2.bind(V));
         }
-        return webidl.converters["record<ByteString, ByteString>"](V, prefix, argument);
+        return webidl.converters["record<ByteString, ByteString>"](V, prefix2, argument);
       }
       throw webidl.errors.conversionFailed({
         prefix: "Headers constructor",
@@ -12706,32 +12706,32 @@ var require_response = __commonJS({
     webidl.converters.URLSearchParams = webidl.interfaceConverter(
       URLSearchParams
     );
-    webidl.converters.XMLHttpRequestBodyInit = function(V, prefix, name) {
+    webidl.converters.XMLHttpRequestBodyInit = function(V, prefix2, name) {
       if (typeof V === "string") {
-        return webidl.converters.USVString(V, prefix, name);
+        return webidl.converters.USVString(V, prefix2, name);
       }
       if (isBlobLike(V)) {
-        return webidl.converters.Blob(V, prefix, name, { strict: false });
+        return webidl.converters.Blob(V, prefix2, name, { strict: false });
       }
       if (ArrayBuffer.isView(V) || types.isArrayBuffer(V)) {
-        return webidl.converters.BufferSource(V, prefix, name);
+        return webidl.converters.BufferSource(V, prefix2, name);
       }
       if (util.isFormDataLike(V)) {
-        return webidl.converters.FormData(V, prefix, name, { strict: false });
+        return webidl.converters.FormData(V, prefix2, name, { strict: false });
       }
       if (V instanceof URLSearchParams) {
-        return webidl.converters.URLSearchParams(V, prefix, name);
+        return webidl.converters.URLSearchParams(V, prefix2, name);
       }
-      return webidl.converters.DOMString(V, prefix, name);
+      return webidl.converters.DOMString(V, prefix2, name);
     };
-    webidl.converters.BodyInit = function(V, prefix, argument) {
+    webidl.converters.BodyInit = function(V, prefix2, argument) {
       if (V instanceof ReadableStream) {
-        return webidl.converters.ReadableStream(V, prefix, argument);
+        return webidl.converters.ReadableStream(V, prefix2, argument);
       }
       if (V?.[Symbol.asyncIterator]) {
         return V;
       }
-      return webidl.converters.XMLHttpRequestBodyInit(V, prefix, argument);
+      return webidl.converters.XMLHttpRequestBodyInit(V, prefix2, argument);
     };
     webidl.converters.ResponseInit = webidl.dictionaryConverter([
       {
@@ -12872,10 +12872,10 @@ var require_request2 = __commonJS({
         if (input === kConstruct) {
           return;
         }
-        const prefix = "Request constructor";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        input = webidl.converters.RequestInfo(input, prefix, "input");
-        init = webidl.converters.RequestInit(init, prefix, "init");
+        const prefix2 = "Request constructor";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        input = webidl.converters.RequestInfo(input, prefix2, "input");
+        init = webidl.converters.RequestInit(init, prefix2, "init");
         let request2 = null;
         let fallbackMode = null;
         const baseUrl = environmentSettingsObject.settingsObject.baseUrl;
@@ -13400,14 +13400,14 @@ var require_request2 = __commonJS({
     webidl.converters.Request = webidl.interfaceConverter(
       Request
     );
-    webidl.converters.RequestInfo = function(V, prefix, argument) {
+    webidl.converters.RequestInfo = function(V, prefix2, argument) {
       if (typeof V === "string") {
-        return webidl.converters.USVString(V, prefix, argument);
+        return webidl.converters.USVString(V, prefix2, argument);
       }
       if (V instanceof Request) {
-        return webidl.converters.Request(V, prefix, argument);
+        return webidl.converters.Request(V, prefix2, argument);
       }
-      return webidl.converters.USVString(V, prefix, argument);
+      return webidl.converters.USVString(V, prefix2, argument);
     };
     webidl.converters.AbortSignal = webidl.interfaceConverter(
       AbortSignal
@@ -15446,10 +15446,10 @@ var require_cache = __commonJS({
       }
       async match(request2, options = {}) {
         webidl.brandCheck(this, _Cache);
-        const prefix = "Cache.match";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        request2 = webidl.converters.RequestInfo(request2, prefix, "request");
-        options = webidl.converters.CacheQueryOptions(options, prefix, "options");
+        const prefix2 = "Cache.match";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        request2 = webidl.converters.RequestInfo(request2, prefix2, "request");
+        options = webidl.converters.CacheQueryOptions(options, prefix2, "options");
         const p = this.#internalMatchAll(request2, options, 1);
         if (p.length === 0) {
           return;
@@ -15458,30 +15458,30 @@ var require_cache = __commonJS({
       }
       async matchAll(request2 = void 0, options = {}) {
         webidl.brandCheck(this, _Cache);
-        const prefix = "Cache.matchAll";
-        if (request2 !== void 0) request2 = webidl.converters.RequestInfo(request2, prefix, "request");
-        options = webidl.converters.CacheQueryOptions(options, prefix, "options");
+        const prefix2 = "Cache.matchAll";
+        if (request2 !== void 0) request2 = webidl.converters.RequestInfo(request2, prefix2, "request");
+        options = webidl.converters.CacheQueryOptions(options, prefix2, "options");
         return this.#internalMatchAll(request2, options);
       }
       async add(request2) {
         webidl.brandCheck(this, _Cache);
-        const prefix = "Cache.add";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        request2 = webidl.converters.RequestInfo(request2, prefix, "request");
+        const prefix2 = "Cache.add";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        request2 = webidl.converters.RequestInfo(request2, prefix2, "request");
         const requests = [request2];
         const responseArrayPromise = this.addAll(requests);
         return await responseArrayPromise;
       }
       async addAll(requests) {
         webidl.brandCheck(this, _Cache);
-        const prefix = "Cache.addAll";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
+        const prefix2 = "Cache.addAll";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
         const responsePromises = [];
         const requestList = [];
         for (let request2 of requests) {
           if (request2 === void 0) {
             throw webidl.errors.conversionFailed({
-              prefix,
+              prefix: prefix2,
               argument: "Argument 1",
               types: ["undefined is not allowed"]
             });
@@ -15493,7 +15493,7 @@ var require_cache = __commonJS({
           const r = request2[kState];
           if (!urlIsHttpHttpsScheme(r.url) || r.method !== "GET") {
             throw webidl.errors.exception({
-              header: prefix,
+              header: prefix2,
               message: "Expected http/s scheme when method is not GET."
             });
           }
@@ -15503,7 +15503,7 @@ var require_cache = __commonJS({
           const r = new Request(request2)[kState];
           if (!urlIsHttpHttpsScheme(r.url)) {
             throw webidl.errors.exception({
-              header: prefix,
+              header: prefix2,
               message: "Expected http/s scheme."
             });
           }
@@ -15579,10 +15579,10 @@ var require_cache = __commonJS({
       }
       async put(request2, response) {
         webidl.brandCheck(this, _Cache);
-        const prefix = "Cache.put";
-        webidl.argumentLengthCheck(arguments, 2, prefix);
-        request2 = webidl.converters.RequestInfo(request2, prefix, "request");
-        response = webidl.converters.Response(response, prefix, "response");
+        const prefix2 = "Cache.put";
+        webidl.argumentLengthCheck(arguments, 2, prefix2);
+        request2 = webidl.converters.RequestInfo(request2, prefix2, "request");
+        response = webidl.converters.Response(response, prefix2, "response");
         let innerRequest = null;
         if (request2 instanceof Request) {
           innerRequest = request2[kState];
@@ -15591,14 +15591,14 @@ var require_cache = __commonJS({
         }
         if (!urlIsHttpHttpsScheme(innerRequest.url) || innerRequest.method !== "GET") {
           throw webidl.errors.exception({
-            header: prefix,
+            header: prefix2,
             message: "Expected an http/s scheme when method is not GET"
           });
         }
         const innerResponse = response[kState];
         if (innerResponse.status === 206) {
           throw webidl.errors.exception({
-            header: prefix,
+            header: prefix2,
             message: "Got 206 status"
           });
         }
@@ -15607,7 +15607,7 @@ var require_cache = __commonJS({
           for (const fieldValue of fieldValues) {
             if (fieldValue === "*") {
               throw webidl.errors.exception({
-                header: prefix,
+                header: prefix2,
                 message: "Got * vary field value"
               });
             }
@@ -15615,7 +15615,7 @@ var require_cache = __commonJS({
         }
         if (innerResponse.body && (isDisturbed(innerResponse.body.stream) || innerResponse.body.stream.locked)) {
           throw webidl.errors.exception({
-            header: prefix,
+            header: prefix2,
             message: "Response body is locked or disturbed"
           });
         }
@@ -15660,10 +15660,10 @@ var require_cache = __commonJS({
       }
       async delete(request2, options = {}) {
         webidl.brandCheck(this, _Cache);
-        const prefix = "Cache.delete";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        request2 = webidl.converters.RequestInfo(request2, prefix, "request");
-        options = webidl.converters.CacheQueryOptions(options, prefix, "options");
+        const prefix2 = "Cache.delete";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        request2 = webidl.converters.RequestInfo(request2, prefix2, "request");
+        options = webidl.converters.CacheQueryOptions(options, prefix2, "options");
         let r = null;
         if (request2 instanceof Request) {
           r = request2[kState];
@@ -15706,9 +15706,9 @@ var require_cache = __commonJS({
        */
       async keys(request2 = void 0, options = {}) {
         webidl.brandCheck(this, _Cache);
-        const prefix = "Cache.keys";
-        if (request2 !== void 0) request2 = webidl.converters.RequestInfo(request2, prefix, "request");
-        options = webidl.converters.CacheQueryOptions(options, prefix, "options");
+        const prefix2 = "Cache.keys";
+        if (request2 !== void 0) request2 = webidl.converters.RequestInfo(request2, prefix2, "request");
+        options = webidl.converters.CacheQueryOptions(options, prefix2, "options");
         let r = null;
         if (request2 !== void 0) {
           if (request2 instanceof Request) {
@@ -15752,8 +15752,8 @@ var require_cache = __commonJS({
        * @returns {requestResponseList}
        */
       #batchCacheOperations(operations) {
-        const cache = this.#relevantRequestResponseList;
-        const backupCache = [...cache];
+        const cache2 = this.#relevantRequestResponseList;
+        const backupCache = [...cache2];
         const addedItems = [];
         const resultList = [];
         try {
@@ -15780,9 +15780,9 @@ var require_cache = __commonJS({
                 return [];
               }
               for (const requestResponse of requestResponses) {
-                const idx = cache.indexOf(requestResponse);
+                const idx = cache2.indexOf(requestResponse);
                 assert(idx !== -1);
-                cache.splice(idx, 1);
+                cache2.splice(idx, 1);
               }
             } else if (operation.type === "put") {
               if (operation.response == null) {
@@ -15812,11 +15812,11 @@ var require_cache = __commonJS({
               }
               requestResponses = this.#queryCache(operation.request);
               for (const requestResponse of requestResponses) {
-                const idx = cache.indexOf(requestResponse);
+                const idx = cache2.indexOf(requestResponse);
                 assert(idx !== -1);
-                cache.splice(idx, 1);
+                cache2.splice(idx, 1);
               }
-              cache.push([operation.request, operation.response]);
+              cache2.push([operation.request, operation.response]);
               addedItems.push([operation.request, operation.response]);
             }
             resultList.push([operation.request, operation.response]);
@@ -15990,13 +15990,13 @@ var require_cachestorage = __commonJS({
         if (options.cacheName != null) {
           if (this.#caches.has(options.cacheName)) {
             const cacheList = this.#caches.get(options.cacheName);
-            const cache = new Cache(kConstruct, cacheList);
-            return await cache.match(request2, options);
+            const cache2 = new Cache(kConstruct, cacheList);
+            return await cache2.match(request2, options);
           }
         } else {
           for (const cacheList of this.#caches.values()) {
-            const cache = new Cache(kConstruct, cacheList);
-            const response = await cache.match(request2, options);
+            const cache2 = new Cache(kConstruct, cacheList);
+            const response = await cache2.match(request2, options);
             if (response !== void 0) {
               return response;
             }
@@ -16010,9 +16010,9 @@ var require_cachestorage = __commonJS({
        */
       async has(cacheName) {
         webidl.brandCheck(this, _CacheStorage);
-        const prefix = "CacheStorage.has";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        cacheName = webidl.converters.DOMString(cacheName, prefix, "cacheName");
+        const prefix2 = "CacheStorage.has";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        cacheName = webidl.converters.DOMString(cacheName, prefix2, "cacheName");
         return this.#caches.has(cacheName);
       }
       /**
@@ -16022,16 +16022,16 @@ var require_cachestorage = __commonJS({
        */
       async open(cacheName) {
         webidl.brandCheck(this, _CacheStorage);
-        const prefix = "CacheStorage.open";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        cacheName = webidl.converters.DOMString(cacheName, prefix, "cacheName");
+        const prefix2 = "CacheStorage.open";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        cacheName = webidl.converters.DOMString(cacheName, prefix2, "cacheName");
         if (this.#caches.has(cacheName)) {
-          const cache2 = this.#caches.get(cacheName);
-          return new Cache(kConstruct, cache2);
+          const cache3 = this.#caches.get(cacheName);
+          return new Cache(kConstruct, cache3);
         }
-        const cache = [];
-        this.#caches.set(cacheName, cache);
-        return new Cache(kConstruct, cache);
+        const cache2 = [];
+        this.#caches.set(cacheName, cache2);
+        return new Cache(kConstruct, cache2);
       }
       /**
        * @see https://w3c.github.io/ServiceWorker/#cache-storage-delete
@@ -16040,9 +16040,9 @@ var require_cachestorage = __commonJS({
        */
       async delete(cacheName) {
         webidl.brandCheck(this, _CacheStorage);
-        const prefix = "CacheStorage.delete";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        cacheName = webidl.converters.DOMString(cacheName, prefix, "cacheName");
+        const prefix2 = "CacheStorage.delete";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        cacheName = webidl.converters.DOMString(cacheName, prefix2, "cacheName");
         return this.#caches.delete(cacheName);
       }
       /**
@@ -16453,9 +16453,9 @@ var require_cookies = __commonJS({
     }
     function deleteCookie(headers, name, attributes) {
       webidl.brandCheck(headers, Headers2, { strict: false });
-      const prefix = "deleteCookie";
-      webidl.argumentLengthCheck(arguments, 2, prefix);
-      name = webidl.converters.DOMString(name, prefix, "name");
+      const prefix2 = "deleteCookie";
+      webidl.argumentLengthCheck(arguments, 2, prefix2);
+      name = webidl.converters.DOMString(name, prefix2, "name");
       attributes = webidl.converters.DeleteCookieAttributes(attributes);
       setCookie(headers, {
         name,
@@ -16574,10 +16574,10 @@ var require_events = __commonJS({
           webidl.util.markAsUncloneable(this);
           return;
         }
-        const prefix = "MessageEvent constructor";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        type = webidl.converters.DOMString(type, prefix, "type");
-        eventInitDict = webidl.converters.MessageEventInit(eventInitDict, prefix, "eventInitDict");
+        const prefix2 = "MessageEvent constructor";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        type = webidl.converters.DOMString(type, prefix2, "type");
+        eventInitDict = webidl.converters.MessageEventInit(eventInitDict, prefix2, "eventInitDict");
         super(type, eventInitDict);
         this.#eventInit = eventInitDict;
         webidl.util.markAsUncloneable(this);
@@ -16634,9 +16634,9 @@ var require_events = __commonJS({
     var CloseEvent = class _CloseEvent extends Event {
       #eventInit;
       constructor(type, eventInitDict = {}) {
-        const prefix = "CloseEvent constructor";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        type = webidl.converters.DOMString(type, prefix, "type");
+        const prefix2 = "CloseEvent constructor";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        type = webidl.converters.DOMString(type, prefix2, "type");
         eventInitDict = webidl.converters.CloseEventInit(eventInitDict);
         super(type, eventInitDict);
         this.#eventInit = eventInitDict;
@@ -16658,11 +16658,11 @@ var require_events = __commonJS({
     var ErrorEvent = class _ErrorEvent extends Event {
       #eventInit;
       constructor(type, eventInitDict) {
-        const prefix = "ErrorEvent constructor";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
+        const prefix2 = "ErrorEvent constructor";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
         super(type, eventInitDict);
         webidl.util.markAsUncloneable(this);
-        type = webidl.converters.DOMString(type, prefix, "type");
+        type = webidl.converters.DOMString(type, prefix2, "type");
         eventInitDict = webidl.converters.ErrorEventInit(eventInitDict ?? {});
         this.#eventInit = eventInitDict;
       }
@@ -17929,10 +17929,10 @@ var require_websocket = __commonJS({
       constructor(url, protocols = []) {
         super();
         webidl.util.markAsUncloneable(this);
-        const prefix = "WebSocket constructor";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        const options = webidl.converters["DOMString or sequence<DOMString> or WebSocketInit"](protocols, prefix, "options");
-        url = webidl.converters.USVString(url, prefix, "url");
+        const prefix2 = "WebSocket constructor";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        const options = webidl.converters["DOMString or sequence<DOMString> or WebSocketInit"](protocols, prefix2, "options");
+        url = webidl.converters.USVString(url, prefix2, "url");
         protocols = options.protocols;
         const baseURL = environmentSettingsObject.settingsObject.baseUrl;
         let urlRecord;
@@ -17985,12 +17985,12 @@ var require_websocket = __commonJS({
        */
       close(code = void 0, reason = void 0) {
         webidl.brandCheck(this, _WebSocket);
-        const prefix = "WebSocket.close";
+        const prefix2 = "WebSocket.close";
         if (code !== void 0) {
-          code = webidl.converters["unsigned short"](code, prefix, "code", { clamp: true });
+          code = webidl.converters["unsigned short"](code, prefix2, "code", { clamp: true });
         }
         if (reason !== void 0) {
-          reason = webidl.converters.USVString(reason, prefix, "reason");
+          reason = webidl.converters.USVString(reason, prefix2, "reason");
         }
         if (code !== void 0) {
           if (code !== 1e3 && (code < 3e3 || code > 4999)) {
@@ -18015,9 +18015,9 @@ var require_websocket = __commonJS({
        */
       send(data) {
         webidl.brandCheck(this, _WebSocket);
-        const prefix = "WebSocket.send";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
-        data = webidl.converters.WebSocketSendData(data, prefix, "data");
+        const prefix2 = "WebSocket.send";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
+        data = webidl.converters.WebSocketSendData(data, prefix2, "data");
         if (isConnecting(this)) {
           throw new DOMException("Sent before connected.", "InvalidStateError");
         }
@@ -18209,11 +18209,11 @@ var require_websocket = __commonJS({
     webidl.converters["sequence<DOMString>"] = webidl.sequenceConverter(
       webidl.converters.DOMString
     );
-    webidl.converters["DOMString or sequence<DOMString>"] = function(V, prefix, argument) {
+    webidl.converters["DOMString or sequence<DOMString>"] = function(V, prefix2, argument) {
       if (webidl.util.Type(V) === "Object" && Symbol.iterator in V) {
         return webidl.converters["sequence<DOMString>"](V);
       }
-      return webidl.converters.DOMString(V, prefix, argument);
+      return webidl.converters.DOMString(V, prefix2, argument);
     };
     webidl.converters.WebSocketInit = webidl.dictionaryConverter([
       {
@@ -18749,16 +18749,16 @@ var require_eventsource = __commonJS({
       constructor(url, eventSourceInitDict = {}) {
         super();
         webidl.util.markAsUncloneable(this);
-        const prefix = "EventSource constructor";
-        webidl.argumentLengthCheck(arguments, 1, prefix);
+        const prefix2 = "EventSource constructor";
+        webidl.argumentLengthCheck(arguments, 1, prefix2);
         if (!experimentalWarned) {
           experimentalWarned = true;
           process.emitWarning("EventSource is experimental, expect them to change at any time.", {
             code: "UNDICI-ES"
           });
         }
-        url = webidl.converters.USVString(url, prefix, "url");
-        eventSourceInitDict = webidl.converters.EventSourceInitDict(eventSourceInitDict, prefix, "eventSourceInitDict");
+        url = webidl.converters.USVString(url, prefix2, "url");
+        eventSourceInitDict = webidl.converters.EventSourceInitDict(eventSourceInitDict, prefix2, "eventSourceInitDict");
         this.#dispatcher = eventSourceInitDict.dispatcher;
         this.#state = {
           lastEventId: "",
@@ -19425,8 +19425,8 @@ var require_directives = __commonJS({
               if (parts.length < 2)
                 return false;
             }
-            const [handle, prefix] = parts;
-            this.tags[handle] = prefix;
+            const [handle, prefix2] = parts;
+            this.tags[handle] = prefix2;
             return true;
           }
           case "%YAML": {
@@ -19476,10 +19476,10 @@ var require_directives = __commonJS({
         const [, handle, suffix] = source.match(/^(.*!)([^!]*)$/s);
         if (!suffix)
           onError(`The ${source} tag has no suffix`);
-        const prefix = this.tags[handle];
-        if (prefix) {
+        const prefix2 = this.tags[handle];
+        if (prefix2) {
           try {
-            return prefix + decodeURIComponent(suffix);
+            return prefix2 + decodeURIComponent(suffix);
           } catch (error2) {
             onError(String(error2));
             return null;
@@ -19495,9 +19495,9 @@ var require_directives = __commonJS({
        * taking into account current tag prefixes and defaults.
        */
       tagString(tag) {
-        for (const [handle, prefix] of Object.entries(this.tags)) {
-          if (tag.startsWith(prefix))
-            return handle + escapeTagName(tag.substring(prefix.length));
+        for (const [handle, prefix2] of Object.entries(this.tags)) {
+          if (tag.startsWith(prefix2))
+            return handle + escapeTagName(tag.substring(prefix2.length));
         }
         return tag[0] === "!" ? tag : `!<${tag}>`;
       }
@@ -19514,11 +19514,11 @@ var require_directives = __commonJS({
           tagNames = Object.keys(tags);
         } else
           tagNames = [];
-        for (const [handle, prefix] of tagEntries) {
-          if (handle === "!!" && prefix === "tag:yaml.org,2002:")
+        for (const [handle, prefix2] of tagEntries) {
+          if (handle === "!!" && prefix2 === "tag:yaml.org,2002:")
             continue;
-          if (!doc || tagNames.some((tn) => tn.startsWith(prefix)))
-            lines.push(`%TAG ${handle} ${prefix}`);
+          if (!doc || tagNames.some((tn) => tn.startsWith(prefix2)))
+            lines.push(`%TAG ${handle} ${prefix2}`);
         }
         return lines.join("\n");
       }
@@ -19553,14 +19553,14 @@ var require_anchors = __commonJS({
       });
       return anchors;
     }
-    function findNewAnchor(prefix, exclude) {
+    function findNewAnchor(prefix2, exclude) {
       for (let i = 1; true; ++i) {
-        const name = `${prefix}${i}`;
+        const name = `${prefix2}${i}`;
         if (!exclude.has(name))
           return name;
       }
     }
-    function createNodeAnchors(doc, prefix) {
+    function createNodeAnchors(doc, prefix2) {
       const aliasObjects = [];
       const sourceObjects = /* @__PURE__ */ new Map();
       let prevAnchors = null;
@@ -19568,7 +19568,7 @@ var require_anchors = __commonJS({
         onAnchor: (source) => {
           aliasObjects.push(source);
           prevAnchors ?? (prevAnchors = anchorNames(doc));
-          const anchor = findNewAnchor(prefix, prevAnchors);
+          const anchor = findNewAnchor(prefix2, prevAnchors);
           prevAnchors.add(anchor);
           return anchor;
         },
@@ -19767,36 +19767,38 @@ var require_Alias = __commonJS({
           if (node.anchor === this.source)
             found = node;
         }
+        if (found && ctx) {
+          const { anchors: anchors2, doc: doc2, maxAliasCount } = ctx;
+          let data = anchors2.get(found);
+          if (!data) {
+            toJS.toJS(found, null, ctx);
+            data = anchors2.get(found);
+          }
+          if (data?.res === void 0) {
+            const msg = "This should not happen: Alias anchor was not resolved?";
+            throw new ReferenceError(msg);
+          }
+          if (maxAliasCount >= 0) {
+            data.count += 1;
+            if (data.aliasCount === 0)
+              data.aliasCount = getAliasCount(doc2, found, anchors2);
+            if (data.count * data.aliasCount > maxAliasCount) {
+              const msg = "Excessive alias count indicates a resource exhaustion attack";
+              throw new ReferenceError(msg);
+            }
+          }
+        }
         return found;
       }
       toJSON(_arg, ctx) {
         if (!ctx)
           return { source: this.source };
-        const { anchors: anchors2, doc, maxAliasCount } = ctx;
-        const source = this.resolve(doc, ctx);
+        const source = this.resolve(ctx.doc, ctx);
         if (!source) {
           const msg = `Unresolved alias (the anchor must be set before the alias): ${this.source}`;
           throw new ReferenceError(msg);
         }
-        let data = anchors2.get(source);
-        if (!data) {
-          toJS.toJS(source, null, ctx);
-          data = anchors2.get(source);
-        }
-        if (data?.res === void 0) {
-          const msg = "This should not happen: Alias anchor was not resolved?";
-          throw new ReferenceError(msg);
-        }
-        if (maxAliasCount >= 0) {
-          data.count += 1;
-          if (data.aliasCount === 0)
-            data.aliasCount = getAliasCount(doc, source, anchors2);
-          if (data.count * data.aliasCount > maxAliasCount) {
-            const msg = "Excessive alias count indicates a resource exhaustion attack";
-            throw new ReferenceError(msg);
-          }
-        }
-        return data.res;
+        return ctx.anchors.get(source).res;
       }
       toString(ctx, _onComment, _onChompKeep) {
         const src = `*${this.source}`;
@@ -21559,10 +21561,10 @@ var require_int = __commonJS({
     var stringifyNumber = require_stringifyNumber();
     var intIdentify = (value) => typeof value === "bigint" || Number.isInteger(value);
     var intResolve = (str, offset, radix, { intAsBigInt }) => intAsBigInt ? BigInt(str) : parseInt(str.substring(offset), radix);
-    function intStringify(node, radix, prefix) {
+    function intStringify(node, radix, prefix2) {
       const { value } = node;
       if (intIdentify(value) && value >= 0)
-        return prefix + value.toString(radix);
+        return prefix2 + value.toString(radix);
       return stringifyNumber.stringifyNumber(node);
     }
     var intOct = {
@@ -22024,11 +22026,11 @@ var require_int2 = __commonJS({
       const n = parseInt(str, radix);
       return sign === "-" ? -1 * n : n;
     }
-    function intStringify(node, radix, prefix) {
+    function intStringify(node, radix, prefix2) {
       const { value } = node;
       if (intIdentify(value)) {
         const str = value.toString(radix);
-        return value < 0 ? "-" + prefix + str.substr(1) : prefix + str;
+        return value < 0 ? "-" + prefix2 + str.substr(1) : prefix2 + str;
       }
       return stringifyNumber.stringifyNumber(node);
     }
@@ -23798,37 +23800,38 @@ var require_resolve_flow_scalar = __commonJS({
       }
       if (badChar)
         onError(0, "BAD_SCALAR_START", `Plain value cannot start with ${badChar}`);
-      return foldLines(source);
+      return unfoldLines(source);
     }
     function singleQuotedValue(source, onError) {
       if (source[source.length - 1] !== "'" || source.length === 1)
         onError(source.length, "MISSING_CHAR", "Missing closing 'quote");
-      return foldLines(source.slice(1, -1)).replace(/''/g, "'");
+      return unfoldLines(source.slice(1, -1)).replace(/''/g, "'");
     }
-    function foldLines(source) {
-      let first, line;
-      try {
-        first = new RegExp("(.*?)(?<![ 	])[ 	]*\r?\n", "sy");
-        line = new RegExp("[ 	]*(.*?)(?:(?<![ 	])[ 	]*)?\r?\n", "sy");
-      } catch {
-        first = /(.*?)[ \t]*\r?\n/sy;
-        line = /[ \t]*(.*?)[ \t]*\r?\n/sy;
-      }
-      let match2 = first.exec(source);
+    function unfoldLines(source) {
+      const line = /(.*?)\r?\n/sy;
+      let match2 = line.exec(source);
       if (!match2)
         return source;
-      let res = match2[1];
+      let trimEnd, trimBoth;
+      try {
+        trimEnd = new RegExp("(?<![ 	])[ 	]+$");
+        trimBoth = new RegExp("^[ 	]+|(?<![ 	])[ 	]+$", "g");
+      } catch {
+        trimEnd = /[ \t]+$/;
+        trimBoth = /^[ \t]+|[ \t]+$/g;
+      }
+      let res = match2[1].replace(trimEnd, "");
       let sep3 = " ";
-      let pos = first.lastIndex;
-      line.lastIndex = pos;
+      let pos = line.lastIndex;
       while (match2 = line.exec(source)) {
-        if (match2[1] === "") {
+        const lm = match2[1].replace(trimBoth, "");
+        if (lm === "") {
           if (sep3 === "\n")
             res += sep3;
           else
             sep3 = "\n";
         } else {
-          res += sep3 + match2[1];
+          res += sep3 + lm;
           sep3 = " ";
         }
         pos = line.lastIndex;
@@ -27369,6 +27372,61 @@ function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
   return acc;
 }
 
+// node_modules/@isaacs/nonrecursive-glob-match/dist/esm/numeric-range.js
+var digit = (a, b) => a === b ? { t: "lit", ch: String(a) } : { t: "class", re: new RegExp(`^[${a}-${b}]$`) };
+var prefix = (d, alts) => alts.map((s) => [digit(d, d), ...s]);
+var fixed = (a, b) => {
+  if (!a)
+    return [[]];
+  let lo = +a[0];
+  let hi = +b[0];
+  const ra = a.slice(1);
+  const rb = b.slice(1);
+  if (lo === hi)
+    return prefix(lo, fixed(ra, rb));
+  const zeros = "0".repeat(ra.length);
+  const nines = "9".repeat(ra.length);
+  const out = [];
+  if (ra !== zeros)
+    out.push(...prefix(lo++, fixed(ra, nines)));
+  const last = rb === nines ? [] : prefix(hi--, fixed(zeros, rb));
+  if (lo <= hi) {
+    out.push([digit(lo, hi), ...Array.from(ra, () => digit(0, 9))]);
+  }
+  out.push(...last);
+  return out;
+};
+var nonneg = (a, b, width) => {
+  if (width) {
+    return fixed(String(a).padStart(width, "0"), String(b).padStart(width, "0"));
+  }
+  const out = [];
+  for (let len = String(a).length; len <= String(b).length; len++) {
+    const lo = Math.max(a, len === 1 ? 0 : 10 ** (len - 1));
+    const hi = Math.min(b, 10 ** len - 1);
+    out.push(...fixed(String(lo), String(hi)));
+  }
+  return out;
+};
+var numericRange = (loStr, hiStr) => {
+  let lo = Number(loStr);
+  let hi = Number(hiStr);
+  if (!Number.isSafeInteger(lo) || !Number.isSafeInteger(hi))
+    return;
+  if (lo > hi)
+    [lo, hi] = [hi, lo];
+  const padded = /^-?0\d/.test(loStr) || /^-?0\d/.test(hiStr);
+  const width = padded ? Math.max(loStr.length, hiStr.length) : 0;
+  const out = [];
+  if (lo < 0) {
+    const neg = nonneg(Math.max(-hi, 1), -lo, width && width - 1);
+    out.push(...neg.map((s) => [{ t: "lit", ch: "-" }, ...s]));
+  }
+  if (hi >= 0)
+    out.push(...nonneg(Math.max(lo, 0), hi, width));
+  return out;
+};
+
 // node_modules/@isaacs/nonrecursive-glob-match/dist/esm/parse-class.js
 var posixClasses = {
   "[:alnum:]": ["\\p{L}\\p{Nl}\\p{Nd}"],
@@ -27505,10 +27563,24 @@ var litMatch = (l, c) => {
   ascii[code] ||= l.re.test(c) ? 1 : 2;
   return ascii[code] === 1;
 };
-var tokenize = (p, nocase, noext, form) => {
+var tokenize = (p, nocase, noext, form, mark) => {
   const toks = [];
   for (let i = 0; i < p.length; ) {
     const c = String.fromCodePoint(p.codePointAt(i));
+    if (mark) {
+      const m = c === "\\" && p.startsWith(mark, i + 1) ? 1 : 0;
+      if (m || c === mark) {
+        const start = i + m + mark.length;
+        const end = p.indexOf(mark, start);
+        const r = /^(-?\d+)\.\.(-?\d+)$/.exec(p.slice(start, end));
+        const alts = end !== -1 && r && numericRange(r[1], r[2]);
+        if (alts) {
+          toks.push({ t: "ext", type: "@", alts });
+          i = end + mark.length;
+          continue;
+        }
+      }
+    }
     if (c === "\\") {
       const e = p.codePointAt(i + 1);
       const ch = e === void 0 ? c : String.fromCodePoint(e);
@@ -28003,7 +28075,7 @@ var Matcher = class {
     const { nocase = false, noext = false, normalize: n } = options;
     this.#form = n === true ? "NFC" : n || void 0;
     const literal2 = /^[?*+@]\(\)$/.test(pattern);
-    const toks = tokenize(pattern, nocase, noext || literal2, this.#form);
+    const toks = tokenize(pattern, nocase, noext || literal2, this.#form, options.rangeMark);
     let [items] = build(toks, pair(toks), 0, toks.length, true);
     if (this.#form)
       items = normalize(items, this.#form);
@@ -28080,7 +28152,7 @@ var Matcher = class {
     if (chars !== void 0 && (chars.length < min || chars.length > max)) {
       return false;
     }
-    const prefix = this.#prefix.length;
+    const prefix2 = this.#prefix.length;
     if (this.#affix) {
       if (this.#prefixStr !== void 0 && this.#suffixStr !== void 0) {
         if (!s.startsWith(this.#prefixStr) || !s.endsWith(this.#suffixStr)) {
@@ -28098,13 +28170,13 @@ var Matcher = class {
     if (this.#linear) {
       if (s === "." || s === "..")
         return false;
-      if (dotStart && !prefix)
+      if (dotStart && !prefix2)
         return false;
       if (this.#wild)
         return true;
       chars ??= codePoints(s);
       const end = chars.length - this.#suffix.length;
-      return testLinear(this.#linear, chars, prefix, end);
+      return testLinear(this.#linear, chars, prefix2, end);
     }
     chars ??= codePoints(s);
     if (s === "." || s === "..") {
@@ -28164,12 +28236,115 @@ var unescape = (s, { windowsPathsNoEscape = false, magicalBraces = true } = {}) 
 };
 
 // node_modules/minimatch/dist/esm/index.js
-var minimatch = (p, pattern, options = {}) => {
+var DEFAULT_BRACE_EXPAND_MAX = 1e5;
+var DEFAULT_GLOB_STAR_RECURSION_MAX = 200;
+var AWE_KEY = "allowWindowsEscape";
+var minimatch = (p, pattern, options) => {
   assertValidPattern(pattern);
-  if (!options.nocomment && pattern.charAt(0) === "#") {
+  if (!options?.nocomment && pattern.charAt(0) === "#") {
     return false;
   }
-  return new Minimatch(pattern, options).match(p);
+  return cachedMinimatch(pattern, options).match(p);
+};
+var cache = /* @__PURE__ */ new Map();
+var oldCache = /* @__PURE__ */ new Map();
+var cacheSize = 0;
+var cacheMax = 256;
+var tri = (v) => v === void 0 ? 0 : v ? 2 : 1;
+var booleanWeights = new Map(Object.keys({
+  nobrace: 0,
+  nocomment: 0,
+  nonegate: 0,
+  noglobstar: 0,
+  noext: 0,
+  nonull: 0,
+  partial: 0,
+  dot: 0,
+  nocase: 0,
+  nocaseMagicOnly: 0,
+  magicalBraces: 0,
+  matchBase: 0,
+  flipNegate: 0,
+  preserveMultipleSlashes: 0,
+  windowsNoMagicRoot: 0
+}).map((k, i) => [k, 24 * 3 ** i]));
+var optionsKey = (o) => {
+  let n = 0;
+  let wpe = false;
+  for (const k in o) {
+    const v = o[k];
+    switch (k) {
+      // the same test as the Minimatch constructor
+      case "windowsPathsNoEscape":
+        if (v)
+          wpe = true;
+        break;
+      case AWE_KEY:
+        if (v === false)
+          wpe = true;
+        break;
+      case "platform": {
+        const p = v || defaultPlatform;
+        if (p === defaultPlatform)
+          break;
+        if (p === "darwin")
+          n += 3;
+        else if (p === "win32")
+          n += 6;
+        else if (p === "linux")
+          n += 9;
+        else
+          return JSON.stringify(o);
+        break;
+      }
+      case "optimizationLevel":
+        if (v === void 0)
+          break;
+        n += v >= 2 ? 1 : v >= 1 ? 0 : 2;
+        break;
+      case "braceExpandMax":
+        if (v !== void 0 && v !== DEFAULT_BRACE_EXPAND_MAX) {
+          return JSON.stringify(o);
+        }
+        break;
+      case "maxGlobstarRecursion":
+        if (v !== void 0 && v !== DEFAULT_GLOB_STAR_RECURSION_MAX) {
+          return JSON.stringify(o);
+        }
+        break;
+      case "normalize":
+        if (v !== void 0)
+          return JSON.stringify(o);
+        break;
+      default:
+        n += (booleanWeights.get(k) ?? 0) * tri(v);
+    }
+  }
+  return wpe ? n + 12 : n;
+};
+var copyOptions = (o) => {
+  const copy = {};
+  for (const k in o)
+    copy[k] = o[k];
+  return copy;
+};
+var cachedMinimatch = (pattern, options) => {
+  const key = options ? optionsKey(options) : 0;
+  let mm = cache.get(key)?.get(pattern);
+  if (mm)
+    return mm;
+  mm = oldCache.get(key)?.get(pattern) ?? new Minimatch(pattern, copyOptions(options));
+  if (cacheSize >= cacheMax) {
+    oldCache = cache;
+    cache = /* @__PURE__ */ new Map();
+    cacheSize = 0;
+  }
+  let byPattern = cache.get(key);
+  if (!byPattern)
+    cache.set(key, byPattern = /* @__PURE__ */ new Map());
+  byPattern.set(pattern, mm);
+  cacheSize++;
+  return mm;
 };
 var defaultPlatform = typeof process === "object" && process ? process.env?.__MINIMATCH_TESTING_PLATFORM__ || process.platform : "posix";
 var path = {
@@ -28180,7 +28355,10 @@ var sep = defaultPlatform === "win32" ? path.win32.sep : path.posix.sep;
 minimatch.sep = sep;
 var GLOBSTAR = /* @__PURE__ */ Symbol("globstar **");
 minimatch.GLOBSTAR = GLOBSTAR;
-var filter = (pattern, options = {}) => (p) => minimatch(p, pattern, options);
+var filter = (pattern, options) => {
+  let mm;
+  return (p) => (mm ??= cachedMinimatch(pattern, options)).match(p);
+};
 minimatch.filter = filter;
 var ext = (a, b = {}) => Object.assign({}, a, b);
 var defaults = (def) => {
@@ -28217,6 +28395,8 @@ var braceExpand = (pattern, options = {}) => {
   return expand(pattern, { max: options.braceExpandMax });
 };
 minimatch.braceExpand = braceExpand;
+var RANGE_MIN = 100;
+var rangeRe = /(?<![\\$])\{(-?\d+)\.\.(-?\d+)\}/g;
 var match = (list, pattern, options = {}) => {
   const mm = new Minimatch(pattern, options);
   list = list.filter((f) => mm.match(f));
@@ -28342,6 +28522,7 @@ var nextSep = (f, from, sep3) => {
   return s === -1 ? b : b === -1 ? s : Math.min(s, b);
 };
 var lastSep = (f, from, sep3) => sep3 !== "both" ? f.lastIndexOf(sep3, from) : Math.max(f.lastIndexOf("/", from), f.lastIndexOf("\\", from));
+var PENDING = {};
 var Minimatch = class {
   options;
   set;
@@ -28377,18 +28558,21 @@ var Minimatch = class {
   // brace expansion can make the same portion in many rows, so they
   // share one Matcher, and the states that it caches
   #matchers = /* @__PURE__ */ new Map();
+  // parse() returns PENDING in place of a Matcher
+  #pending = false;
+  // the char that marks numeric ranges in globSet, if any
+  #rangeMark;
   // the GlobstarParts of each pattern row, by start index and partial
   #globstarParts = /* @__PURE__ */ new WeakMap();
   constructor(pattern, options = {}) {
     assertValidPattern(pattern);
     options = options || {};
     this.options = options;
-    this.maxGlobstarRecursion = options.maxGlobstarRecursion ?? 200;
+    this.maxGlobstarRecursion = options.maxGlobstarRecursion ?? DEFAULT_GLOB_STAR_RECURSION_MAX;
     this.pattern = pattern;
     this.platform = options.platform || defaultPlatform;
     this.isWindows = this.platform === "win32";
-    const awe = "allowWindowsEscape";
-    this.windowsPathsNoEscape = !!options.windowsPathsNoEscape || options[awe] === false;
+    this.windowsPathsNoEscape = !!options.windowsPathsNoEscape || options[AWE_KEY] === false;
     if (this.windowsPathsNoEscape) {
       this.pattern = this.pattern.replace(/\\/g, "/");
     }
@@ -28480,9 +28664,10 @@ var Minimatch = class {
       return;
     }
     this.parseNegate();
-    this.globSet = [...new Set(this.braceExpand())];
+    this.globSet = [...new Set(this.#expandBraces())];
     const rawGlobParts = this.globSet.map((s) => this.#slashSplit(s));
     this.globParts = this.preprocess(rawGlobParts);
+    this.#pending = true;
     let set = this.globParts.map((s, _, __) => {
       if (this.isWindows && this.windowsNoMagicRoot) {
         const n = s[2] === "?" && isLongUNC(s[3]) ? 6 : 4;
@@ -28515,6 +28700,14 @@ var Minimatch = class {
     }
     if (!options.noext)
       this.mergeRows();
+    this.#pending = false;
+    this.set.forEach((row, i) => {
+      for (let k = 0; k < row.length; k++) {
+        if (row[k] === PENDING) {
+          row[k] = this.parse(this.globParts[i][k]);
+        }
+      }
+    });
   }
   // Merge rows that only differ in one portion, where each of them
   // is a Matcher, into one row that matches any of them with
@@ -28524,16 +28717,19 @@ var Minimatch = class {
     let merged = true;
     while (merged) {
       merged = false;
+      if (this.set.length < 2)
+        return;
+      let keys = this.#mergeKeys();
       const len = Math.max(0, ...this.set.map((r) => r.length));
       for (let k = 0; k < len; k++) {
         const groups = /* @__PURE__ */ new Map();
+        const R = this.set.length + 1;
         this.set.forEach((row, i) => {
-          if (!(row[k] instanceof Matcher) || !extSafe(this.globParts[i][k])) {
+          if (!(row[k] instanceof Matcher || row[k] === PENDING) || !extSafe(this.globParts[i][k])) {
             return;
           }
-          const parts = [...this.globParts[i]];
-          parts[k] = "";
-          const key = `${row.length}/${parts.join("/")}`;
+          const { pre, suf } = keys[i];
+          const key = pre[k] * R + suf[k + 1];
           const g = groups.get(key);
           if (g)
             g.push(i);
@@ -28556,9 +28752,59 @@ var Minimatch = class {
           merged = true;
           this.set = this.set.filter((_, i) => !drop.has(i));
           this.globParts = this.globParts.filter((_, i) => !drop.has(i));
+          if (this.set.length < 2)
+            return;
+          keys = this.#mergeKeys();
         }
       }
     }
+  }
+  // For each row, number ids for its prefixes and suffixes, such that
+  // pre[k] identifies parts[0..k) and suf[k] identifies parts[k..n).
+  // Two rows are the same other than at portion k exactly when they
+  // have the same pre[k] and suf[k + 1]. This is linear in the size of
+  // the rows, where joining the whole row for every k was quadratic.
+  #mergeKeys() {
+    const partIds = /* @__PURE__ */ new Map();
+    const ids = this.globParts.map((parts) => parts.map((s) => {
+      let id = partIds.get(s);
+      if (id === void 0)
+        partIds.set(s, id = partIds.size);
+      return id;
+    }));
+    const P = partIds.size;
+    const len = Math.max(0, ...ids.map((r) => r.length));
+    const keys = ids.map((r) => ({
+      pre: [0],
+      suf: new Array(r.length + 1).fill(0)
+    }));
+    for (let k = 0; k < len; k++) {
+      const m = /* @__PURE__ */ new Map();
+      ids.forEach((r, i) => {
+        if (k >= r.length)
+          return;
+        const { pre } = keys[i];
+        const key = pre[k] * P + r[k];
+        let id = m.get(key);
+        if (id === void 0)
+          m.set(key, id = m.size + 1);
+        pre.push(id);
+      });
+    }
+    for (let k = len - 1; k >= 0; k--) {
+      const m = /* @__PURE__ */ new Map();
+      ids.forEach((r, i) => {
+        if (k >= r.length)
+          return;
+        const { suf } = keys[i];
+        const key = suf[k + 1] * P + r[k];
+        let id = m.get(key);
+        if (id === void 0)
+          m.set(key, id = m.size + 1);
+        suf[k] = id;
+      });
+    }
+    return keys;
   }
   // various transforms to equivalent pattern sets that are
   // faster to process in a filesystem walk.  The goal is to
@@ -28856,7 +29102,9 @@ var Minimatch = class {
   // **/*/<rest> -> */**/<rest> <== not valid because ** doesn't follow
   // this WOULD be allowed if ** did follow symlinks, or * didn't
   firstPhasePreProcess(globParts) {
-    const { braceExpandMax = 1e5 } = this.options;
+    const { braceExpandMax = DEFAULT_BRACE_EXPAND_MAX } = this.options;
+    let splitCells = 0;
+    const maxSplitCells = 1e6;
     let didSomething = false;
     do {
       didSomething = false;
@@ -28875,13 +29123,18 @@ var Minimatch = class {
           const p2 = parts[gs + 3];
           if (next !== "..")
             continue;
-          if (!p || p === "." || p === ".." || !p2 || p2 === "." || p2 === ".." || globParts.length >= braceExpandMax) {
+          if (!p || p === "." || p === ".." || !p2 || p2 === "." || p2 === "..") {
             continue;
+          }
+          const addedCells = parts.length - 1;
+          if (globParts.length >= braceExpandMax || splitCells + addedCells > maxSplitCells) {
+            throw new RangeError(`optimizationLevel 2: too many patterns from '**/..'`);
           }
           didSomething = true;
           parts.splice(gs, 1);
           const other = parts.slice(0);
           other[gs] = "**";
+          splitCells += addedCells;
           globParts.push(other);
           gs--;
         }
@@ -28920,62 +29173,53 @@ var Minimatch = class {
     return globParts;
   }
   // second phase: multi-pattern dedupes
-  // {<pre>/*/<rest>,<pre>/<p>/<rest>} -> <pre>/*/<rest>
   // {<pre>/<rest>,<pre>/<rest>} -> <pre>/<rest>
-  // {<pre>/**/<rest>,<pre>/<rest>} -> <pre>/**/<rest>
-  //
-  // {<pre>/**/<rest>,<pre>/**/<p>/<rest>} -> <pre>/**/<rest>
-  // ^-- not valid because ** doens't follow symlinks
+  // {<pre>/*/<rest>,<pre>/<p>/<rest>} -> <pre>/*/<rest>
   secondPhasePreProcess(globParts) {
-    if (globParts.length > 1e3)
-      return globParts;
-    for (let i = 0; i < globParts.length - 1; i++) {
-      for (let j = i + 1; j < globParts.length; j++) {
-        const matched = this.partsMatch(globParts[i], globParts[j], !this.preserveMultipleSlashes);
-        if (matched) {
-          globParts[i] = [];
-          globParts[j] = matched;
-          break;
-        }
-      }
-    }
-    return globParts.filter((gs) => gs.length);
-  }
-  partsMatch(a, b, emptyGSMatch = false) {
-    let ai = 0;
-    let bi = 0;
-    let result = [];
-    let which2 = "";
-    while (ai < a.length && bi < b.length) {
-      if (a[ai] === b[bi]) {
-        result.push(which2 === "b" ? b[bi] : a[ai]);
-        ai++;
-        bi++;
-      } else if (emptyGSMatch && a[ai] === "**" && b[bi] === a[ai + 1]) {
-        result.push(a[ai]);
-        ai++;
-      } else if (emptyGSMatch && b[bi] === "**" && a[ai] === b[bi + 1]) {
-        result.push(b[bi]);
-        bi++;
-      } else if (a[ai] === "*" && b[bi] && (this.options.dot || !b[bi].startsWith(".")) && b[bi] !== "**") {
-        if (which2 === "b")
-          return false;
-        which2 = "a";
-        result.push(a[ai]);
-        ai++;
-        bi++;
-      } else if (b[bi] === "*" && a[ai] && (this.options.dot || !a[ai].startsWith(".")) && a[ai] !== "**") {
-        if (which2 === "a")
-          return false;
-        which2 = "b";
-        result.push(b[bi]);
-        ai++;
-        bi++;
-      } else {
+    const keys = /* @__PURE__ */ new Set();
+    const rows = globParts.filter((parts) => {
+      const key = parts.join("/");
+      if (keys.has(key))
         return false;
+      keys.add(key);
+      return true;
+    });
+    const stars = /* @__PURE__ */ new Map();
+    for (const parts of rows) {
+      const s = [];
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i] === "*")
+          s.push(i);
       }
+      if (s.length)
+        stars.set(s.join(","), s);
     }
-    return a.length === b.length && result;
+    if (!stars.size || rows.length * stars.size > 1e5)
+      return rows;
+    const { dot } = this.options;
+    return rows.filter((parts) => {
+      for (const s of stars.values()) {
+        if (s[s.length - 1] >= parts.length)
+          continue;
+        const c = [...parts];
+        let ok = true;
+        let changed = false;
+        for (const i of s) {
+          const p = parts[i];
+          if (p === "*")
+            continue;
+          if (!p || p === "**" || !dot && p.startsWith(".")) {
+            ok = false;
+            break;
+          }
+          c[i] = "*";
+          changed = true;
+        }
+        if (ok && changed && keys.has(c.join("/")))
+          return false;
+      }
+      return true;
+    });
   }
   parseNegate() {
     if (this.nonegate)
@@ -29185,6 +29429,44 @@ var Minimatch = class {
   braceExpand() {
     return braceExpand(this.pattern, this.options);
   }
+  // Expand braces, except numeric ranges such as {0..999} with at
+  // least RANGE_MIN values. Each of those stays in its pattern as
+  // `<mark>0..999<mark>`, for the Matcher to test. If a range might
+  // be inside a [...] class, expand all of them instead.
+  #expandBraces() {
+    const { pattern } = this;
+    if (this.options.nobrace)
+      return this.braceExpand();
+    let code = 57344;
+    while (pattern.includes(String.fromCharCode(code))) {
+      if (++code > 63743)
+        return this.braceExpand();
+    }
+    const mark = String.fromCharCode(code);
+    let found = false;
+    const marked = pattern.replace(rangeRe, (m, lo, hi) => {
+      const a = Number(lo);
+      const b = Number(hi);
+      if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || Math.abs(a - b) + 1 < RANGE_MIN) {
+        return m;
+      }
+      found = true;
+      return `${mark}${lo}..${hi}${mark}`;
+    });
+    if (!found)
+      return this.braceExpand();
+    const set = braceExpand(marked, this.options);
+    for (const p of set) {
+      for (const portion of p.split("/")) {
+        const c = portion.indexOf("[");
+        if (c !== -1 && c < portion.lastIndexOf(mark)) {
+          return this.braceExpand();
+        }
+      }
+    }
+    this.#rangeMark = mark;
+    return set;
+  }
   parse(pattern) {
     assertValidPattern(pattern);
     const options = this.options;
@@ -29193,13 +29475,22 @@ var Minimatch = class {
     if (pattern === "")
       return "";
     const { nocase, nocaseMagicOnly, noext = false, dot, normalize: normalize2 } = options;
-    const lit2 = literal(pattern, noext);
+    const rangeMark = this.#rangeMark;
+    const lit2 = rangeMark && pattern.includes(rangeMark) ? void 0 : literal(pattern, noext);
     if (lit2 !== void 0 && !(nocase && !nocaseMagicOnly && pattern.toUpperCase() !== pattern.toLowerCase())) {
       return this.#norm(lit2);
     }
+    if (this.#pending)
+      return PENDING;
     let m = this.#matchers.get(pattern);
     if (!m) {
-      m = new Matcher(pattern, { nocase, noext, dot, normalize: normalize2 });
+      m = new Matcher(pattern, {
+        nocase,
+        noext,
+        dot,
+        normalize: normalize2,
+        ...rangeMark && { rangeMark }
+      });
       this.#matchers.set(pattern, m);
     }
     return m;
@@ -32803,9 +33094,9 @@ var handler = {
   set(target, methodName, value) {
     return target.cache[methodName] = value;
   },
-  get({ octokit, scope, cache }, methodName) {
-    if (cache[methodName]) {
-      return cache[methodName];
+  get({ octokit, scope, cache: cache2 }, methodName) {
+    if (cache2[methodName]) {
+      return cache2[methodName];
     }
     const method = endpointMethodsMap.get(scope).get(methodName);
     if (!method) {
@@ -32813,7 +33104,7 @@ var handler = {
     }
     const { endpointDefaults, decorations } = method;
     if (decorations) {
-      cache[methodName] = decorate(
+      cache2[methodName] = decorate(
         octokit,
         scope,
         methodName,
@@ -32821,9 +33112,9 @@ var handler = {
         decorations
       );
     } else {
-      cache[methodName] = octokit.request.defaults(endpointDefaults);
+      cache2[methodName] = octokit.request.defaults(endpointDefaults);
     }
-    return cache[methodName];
+    return cache2[methodName];
   }
 };
 function endpointsToMethods(octokit) {
@@ -33823,7 +34114,7 @@ function buildHookEnv(base, context) {
       continue;
     }
     const upper = name.toUpperCase();
-    if (REMOVED_NAMES.has(upper) || REMOVED_PREFIXES.some((prefix) => upper.startsWith(prefix))) {
+    if (REMOVED_NAMES.has(upper) || REMOVED_PREFIXES.some((prefix2) => upper.startsWith(prefix2))) {
       continue;
     }
     env[name] = value;
@@ -33914,7 +34205,7 @@ async function runBash(hook2, command, context, input, logStdout) {
     throw new Error("cannot find bash; install Git for Windows on this runner");
   }
   const env = buildHookEnv(process.env, { BOILERPLATE_SYNC_HOOK: hook2, ...context });
-  const prefix = hook2 === "transform" ? "  | " : "";
+  const prefix2 = hook2 === "transform" ? "  | " : "";
   const stderrTail = [];
   const tempRoot = process.env.RUNNER_TEMP || os5.tmpdir();
   const scriptDir = await fsp.mkdtemp(path3.join(tempRoot, "boilerplate-sync-hook-"));
@@ -33927,9 +34218,9 @@ async function runBash(hook2, command, context, input, logStdout) {
       script,
       env,
       input,
-      logStdout ? (line) => info(`${prefix}${line}`) : void 0,
+      logStdout ? (line) => info(`${prefix2}${line}`) : void 0,
       (line) => {
-        info(`${prefix}${line}`);
+        info(`${prefix2}${line}`);
         stderrTail.push(line);
         if (stderrTail.length > STDERR_TAIL_LINES) {
           stderrTail.shift();

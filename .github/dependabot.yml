@@ -4,24 +4,36 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
     groups:
-      major:
-        update-types: [major]
-      minor-patch:
-        update-types: [minor, patch]
+      deps:
+        patterns: ['*']
+    commit-message:
+      prefix: build
+      include: scope
+    ignore:
+      # typescript-eslint 8.x accepts typescript <6.1.0 only, and TypeScript 7.0
+      # ships no JavaScript API (typescript-eslint#10940).
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
     cooldown:
-      semver-major-days: 30
+      default-days: 7
+  # Not grouped with npm: actions run in jobs that hold write scopes, so they
+  # get a pull request of their own that a failing npm update cannot hold.
   - package-ecosystem: github-actions
     directories:
       - /
       - /.github/actions/*
     schedule:
-      interval: cron
-      cronjob: '0 0 1,15 * *' # 1st and 15th monthly at midnight UTC
+      interval: weekly
+      day: monday
     groups:
       actions:
         patterns: ['*']
+    commit-message:
+      prefix: build
+      include: scope
     ignore:
       # Self-references, all pinned deliberately: marketplace-smoke.yml
       # consumes @v1 to exercise the movable alias the README advertises and
@@ -38,4 +50,4 @@ updates:
       # for this ecosystem ("not supported for the package ecosystem
       # 'github-actions'"), which invalidated the whole file and got the
       # github-actions entry -- ignore rules and grouping included -- dropped.
-      default-days: 30
+      default-days: 7
