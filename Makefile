@@ -119,19 +119,21 @@ clean: ## Remove build artifacts and temporary files
 ## Pre-commit hooks ##
 ######################
 
+# Every worktree shares these hooks, so they run from an environment in the
+# common git directory rather than whichever pre-commit is first on PATH.
 .PHONY: enable-pre-commit
 enable-pre-commit: ## Enable pre-commit hooks (along with commit-msg and pre-push hooks)
-	@if command -v pre-commit >/dev/null 2>&1; then \
-        pre-commit install; \
-    else \
-        echo "$(YELLOW)Warning: pre-commit is not installed. Skipping hook installation.$(_COLOR)"; \
-        echo "Install it with: pip install pre-commit (or brew install pre-commit on macOS)"; \
-    fi
+	@common_dir="$$(git rev-parse --path-format=absolute --git-common-dir)" || exit 1; \
+    hooks_venv="$$common_dir/pre-commit-venv"; \
+    python3 -m venv "$$hooks_venv" && \
+    "$$hooks_venv/bin/python" -m pip install --require-hashes -r requirements-hooks.txt && \
+    "$$hooks_venv/bin/pre-commit" install
 
 .PHONY: disable-pre-commit
 disable-pre-commit: ## Disable pre-commit hooks (removes commit-msg, pre-commit, pre-push, and prepare-commit-msg hooks)
-	@if command -v pre-commit >/dev/null 2>&1; then \
-        $(UV) run pre-commit uninstall; \
+	@hooks_venv="$$(git rev-parse --path-format=absolute --git-common-dir)/pre-commit-venv"; \
+    if [ -x "$$hooks_venv/bin/pre-commit" ]; then \
+        "$$hooks_venv/bin/pre-commit" uninstall && \
         echo "$(BOLD)$(GREEN)Pre-commit hooks disabled.$(_COLOR)"; \
     else \
         echo "$(YELLOW)Warning: pre-commit is not installed. Nothing to disable.$(_COLOR)"; \
