@@ -23,18 +23,18 @@
     "@actions/exec": "^3.0.0",
     "@actions/github": "^9.1.1",
     "@octokit/rest": "^22.0.1",
-    "minimatch": "^11.0.1",
-    "yaml": "^2.9.0"
+    "minimatch": "^11.0.7",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^26.2.0",
-    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@types/node": "^26.6.6",
+    "@typescript-eslint/eslint-plugin": "^8.72.2",
     "@typescript-eslint/parser": "^8.58.0",
-    "@vitest/coverage-v8": "^5.0.5",
+    "@vitest/coverage-v8": "^5.1.0",
     "esbuild": "^0.28.2",
-    "eslint": "^10.8.1",
-    "globals": "^17.9.0",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5"
   },
