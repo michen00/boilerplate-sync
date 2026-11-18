@@ -154,6 +154,12 @@ jobs:
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}
+          # Manifest mode, so never add a release-type input here: setting it
+          # switches the action to inline config, which never reads
+          # release-please-config.json. release-type lives in that file, beside
+          # include-component-in-tag: false. Without that flag, release-please
+          # looks for boilerplate-sync-vX.Y.Z tags, finds none, walks all of
+          # history and proposes a 2.0.0 from the breaking commits in 1.0.0.
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
