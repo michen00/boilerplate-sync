@@ -30,6 +30,7 @@ The project has defined a [code of conduct](https://github.com/michen00/.github/
     - [Dev shortcuts](#dev-shortcuts)
     - [Committing your changes](#committing-your-changes)
     - [Before opening a Pull Request](#before-opening-a-pull-request)
+- [Releasing](#releasing)
 
 ## I have a question
 
@@ -143,12 +144,26 @@ git push origin <branch name>
   - Make sure `npm run type-check` passes without errors
   - Run `npm run test` (or `make test`) to verify tests pass
   - Run `make run-pre-commit` to run the pre-commit checks
-- The pull request title follows the same conventional-commit rules as a commit subject (check locally with `python3 -m checks.check_pr_title "<title>"`). The body has no required sections, but leftover placeholders, TBD or TODO markers, markdownlint directives, and code fences without a language tag draw warnings that do not fail the check (check with `printf '%s' "$BODY" | python3 -m checks.check_pr_body --require`). Bot-authored pull requests are exempt from both
+- [michen00/pr-checks](https://github.com/michen00/pr-checks) checks the pull request title and body. The title follows the same conventional-commit rules as a commit subject. The body has no required sections; a code fence without a language tag fails the check, and leftover placeholders, TBD or TODO markers, and markdownlint directives draw warnings that do not. Bot-authored pull requests are exempt from both
 - Follow the code standards and conventions of the project
 - Pull request bodies are unwrapped automatically (hard line breaks joined into flowing prose) when a pull request is opened, reopened, or marked ready for review; add `<!-- unwrap-ignore -->` on the line above a paragraph to keep an intentional line break
 - If you link to a file from a pull request's description or comments, use the link on your branch (`https://github.com/michen00/boilerplate-sync/blob/<branch>/<path>`) rather than one pinned to a commit. While the pull request is open, that link shows the latest version, and when it merges, `freeze-pr-links.yml` points it at the branch's last commit so it keeps working after the branch is deleted
 
 And finally, when you are satisfied with your changes, open a new PR.
+
+## Releasing
+
+Releases are automated by [`release.yml`](.github/workflows/release.yml). When a `feat` or `fix` commit, or a breaking change, lands on `main`, release-please opens or updates a `chore(main): release X.Y.Z` pull request that bumps the version and adds the `CHANGELOG.md` section. Merging that pull request is the only manual step: it tags `vX.Y.Z`, moves `v1` to the same commit, and publishes the GitHub Release. Don't create tags or releases by hand, and don't edit `CHANGELOG.md`.
+
+To preview the next release pull request without opening it:
+
+```sh
+npx release-please release-pr --dry-run --repo-url=michen00/boilerplate-sync --token "$(gh auth token)"
+```
+
+Leave out `--release-type`: like the action's input of the same name, it makes release-please ignore `release-please-config.json`.
+
+If a release run fails partway, for example after pushing the tag but before publishing the Release, run the workflow again with `gh workflow run release.yml`. It checks whether the version in `.release-please-manifest.json` already has a Release, and if not, finishes the missing steps.
 
 [issues]: https://github.com/michen00/boilerplate-sync/issues
 [issues_new]: https://github.com/michen00/boilerplate-sync/issues/new
