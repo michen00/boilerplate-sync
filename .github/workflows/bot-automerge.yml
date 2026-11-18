@@ -23,9 +23,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Runs the pull request's code, with no secret and no write access, and hands its
-  # build to the job below as an artifact. main's ruleset requires ci.yml's checks by
-  # name, `build` among them, which a job here of the same name would also report.
+  # Runs the pull request's code, so it holds no secret and no write access. A job here
+  # named `build`, like ci.yml's required check, would report that check too.
   build-and-check:
     runs-on: ubuntu-latest
     # The guard reads `pull_request.user.login`, not `github.actor`: the actor is whoever
@@ -73,14 +72,13 @@ jobs:
           # A re-run of this job uploads again under the same name.
           overwrite: true
 
-  # Runs nothing from the pull request. It restores no cache either, as the build job can
-  # write to the cache scope that a pull request's runs share. The build arrives as an
-  # artifact, read as data.
+  # Runs nothing from the pull request, and restores no cache, as the build job can write
+  # to the cache scope that a pull request's runs share.
   bot-automerge:
     needs: build-and-check
     runs-on: ubuntu-latest
-    # The build job's guard. always() lets a failed or cancelled build reach the disarm at
-    # the end; the first step skips everything else.
+    # `always()` lets a failed or canceled build reach the disarm; the first step's failure
+    # then skips the rest.
     if: >-
       always() &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -97,7 +95,6 @@ jobs:
       # `if:` cannot read `secrets`, so the key's presence is exposed here.
       APP_KEY_SET: ${{ secrets.APP_PRIVATE_KEY != '' }}
     steps:
-      # A failed step skips every later one that does not ask for always().
       - name: Require a successful build
         if: needs.build-and-check.result != 'success'
         env:
@@ -144,9 +141,8 @@ jobs:
         with:
           name: dist
           path: ${{ runner.temp }}/build
-      # In a directory of its own, so no path in the pull request can stand where the
-      # default branch's checkout goes. With no checkout at the workspace root, the gh
-      # steps below name GH_REPO.
+      # In a directory of its own, so no path in the pull request can overlap the default
+      # branch's checkout.
       - name: Check out the pull request
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -160,8 +156,8 @@ jobs:
           set -euo pipefail
           # Byte ranges in the name patterns below.
           export LC_ALL=C
-          # The job that uploaded it ran the pull request's code. Names are left out of the
-          # log, where one could pass for a workflow command.
+          # The build ran the pull request's code. Names stay out of the log, where one
+          # could pass for a workflow command.
           odd=$(find "$BUILD" -mindepth 1 \( \( ! -type f ! -type d \) \
             -o ! -name '[A-Za-z0-9_]*' -o -name '*[!A-Za-z0-9_.+@-]*' \) -print -quit)
           if [ -n "$odd" ]; then
