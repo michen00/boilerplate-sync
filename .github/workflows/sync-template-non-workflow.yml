@@ -4,7 +4,7 @@ name: Sync boilerplate files (non-workflow)
 
 on:
   schedule:
-    - cron: '0 9 * * 1' # Every Monday at 9am
+    - cron: '17 13 * * 2' # Tuesdays at 13:17 UTC; GitHub delays runs at the top of the hour
   workflow_dispatch:
 
 concurrency:
