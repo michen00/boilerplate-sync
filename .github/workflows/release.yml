@@ -20,8 +20,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# The ambient token starts the README workflow at the end. Every other
-# mutating call below passes the App token explicitly.
 permissions:
   actions: write
   contents: read
