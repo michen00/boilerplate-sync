@@ -375,11 +375,11 @@ This repository's two template-sync workflows reuse `vars.APP_CLIENT_ID` and `se
 
 Both workflows run only from the default branch. Non-workflow files sync weekly or on manual dispatch; workflow files sync on manual dispatch. Changes become signed App-authored pull requests, which can trigger normal PR checks. Runs with no changes skip PR creation. The public template is read using `GITHUB_TOKEN`, so the App token only needs access to this destination repository.
 
-The selection was compared against template commit [`4184670`](https://github.com/michen00/template/commit/418467037184ad493d396ee6ed80de32183ef1d0) on 2026-11-03. These 13 files have equivalent configuration and behavior here:
+The selection was compared against template commit [`4184670`](https://github.com/michen00/template/commit/418467037184ad493d396ee6ed80de32183ef1d0) on 2026-11-03, and `.github/release.yml` against [`6bf81ce`](https://github.com/michen00/template/commit/6bf81ce56433dd2ae6d9d4c1b71de961f40304ea) on 2026-11-19. These 14 files have equivalent configuration and behavior here:
 
 | Stream | Selected files |
 | --- | --- |
-| Configs | `.editorconfig`, `.gitlint`, `.markdownlint.yml`, `.prettierrc`, `tombi.toml`, `.github/actionlint.yaml` |
+| Configs | `.editorconfig`, `.gitlint`, `.markdownlint.yml`, `.prettierrc`, `tombi.toml`, `.github/actionlint.yaml`, `.github/release.yml` |
 | Supporting automation | `.github/actions/detect-bot-author/action.yml`, `.github/scripts/approve-bot-gated-runs.sh` |
 | Workflows | `bot-automerge-disarm.yml`, `freeze-pr-links.yml`, `greet-new-contributors.yml`, `pr-body-unwrap.yml`, `pr-catchup.yml` |
 
