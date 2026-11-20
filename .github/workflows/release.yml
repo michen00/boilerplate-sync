@@ -1,14 +1,13 @@
 ---
 name: Release
 
-# release-please maintains one release PR; merging it is the only human step.
+# release-please maintains one release PR. Merging it is the only human step.
 #
-# The annotated tag is pushed first because release-please's POST /releases
-# would otherwise create a lightweight one.
+# The tag step pushes an annotated tag first, because release-please's
+# POST /releases creates a lightweight one.
 #
-# release-please still creates the Release. With skip-github-release, nothing
-# clears its "autorelease: pending" label, and after one more release PR it
-# opens none, without failing.
+# release-please creates the Release itself. That step also clears the
+# "autorelease: pending" label, so the next release PR can open.
 on:
   push:
     branches: [main]
@@ -18,8 +17,7 @@ permissions:
   actions: write
   contents: read
 
-# Queue rather than cancel: a run killed between the tag push and the release
-# would leave a tag without a release.
+# Runs queue, so each tag push is followed by its release.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -30,8 +28,7 @@ env:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # A dispatch on another branch would tag it and move vN, which consumers
-    # follow, onto it.
+    # Tags and vN, which consumers follow, come only from main.
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Require the App credential
@@ -70,8 +67,8 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "major=${VERSION%%.*}" >> "$GITHUB_OUTPUT"
-          # Only a definite not-found sets due=true. Treating a failed call as
-          # absence would move vN onto unreleased code.
+          # Only "release not found" sets due=true. Other errors fail the job,
+          # so vN stays on released code.
           set +e
           OUT=$(gh release view "v${VERSION}" --json tagName 2>&1)
           RC=$?
@@ -96,8 +93,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email \
             '41898282+github-actions[bot]@users.noreply.github.com'
-          # On a rerun the tag is already fetched. Pushing it unchanged is a
-          # no-op, which release-tags-protect allows.
+          # release-tags-protect allows a rerun's unchanged push of the tag.
           if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
             echo "::notice::tag v${VERSION} already exists; push is a no-op."
           else
@@ -111,33 +107,31 @@ jobs:
           VERSION: ${{ steps.due.outputs.version }}
           MAJOR: ${{ steps.due.outputs.major }}
         run: |
-          # Moved before release-please publishes, because marketplace-smoke.yml
-          # tests the alias on release:published. Anchored to the release tag,
-          # not HEAD, which a retry may have moved past. release-tags-protect
-          # covers only v*.*.*, so vN can be force-pushed.
+          # Moved before publishing, because marketplace-smoke.yml tests the
+          # alias on release:published. It follows the release tag, since HEAD
+          # can move between retries. release-tags-protect covers only v*.*.*,
+          # so vN can move.
           git tag -f -a "v${MAJOR}" -m "Alias for v${VERSION}" \
             "refs/tags/v${VERSION}^{commit}"
           git push --force origin "refs/tags/v${MAJOR}"
 
-      # Runs on every push. It publishes the Release on the tag above, with the
-      # App token so release:published starts release-provenance.yml, then
-      # opens or updates the next release PR.
+      # Runs on every push. It publishes the Release on the tag above and
+      # refreshes the next release PR. Releases made with the App token start
+      # release-provenance.yml.
       - name: Publish the release and refresh the release PR
         id: release-please
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}
-          # Never add release-type: it switches the action to inline config,
-          # which ignores release-please-config.json. Without that file's
-          # include-component-in-tag: false, release-please looks for
-          # boilerplate-sync-vX.Y.Z tags and proposes 2.0.0 from all of history.
+          # A release-type input switches the action to inline config, which
+          # bypasses release-please-config.json. That file sets
+          # include-component-in-tag: false to match the vX.Y.Z tags.
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # Otherwise readme-action-versions.yml waits for its Monday cron to repin
-      # the README's Security example. Cosmetic, so it never fails the release.
-      # A workflow_dispatch from GITHUB_TOKEN always starts a run, and the App
-      # lacks Actions write.
+      # Repins the README's Security example now instead of at the Monday cron.
+      # A failure here is cosmetic. GITHUB_TOKEN has Actions write, and its
+      # dispatches start runs.
       - name: Refresh README version pins
         if: steps.due.outputs.due == 'true'
         continue-on-error: true
