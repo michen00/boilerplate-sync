@@ -54,6 +54,7 @@ jobs:
                 - .github/actionlint.yaml
                 - .github/actions/detect-bot-author/action.yml
                 - .github/scripts/approve-bot-gated-runs.sh
+                - .github/release.yml
                 - .gitlint
                 - .markdownlint.yml
                 - .prettierrc
