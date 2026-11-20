@@ -385,7 +385,7 @@ The selection was compared against template commit [`4184670`](https://github.co
 
 The greeting transform preserves the `boilerplate-sync` community name. Other differences are comments or equivalent JSON/YAML formatting. The supporting action and script are included because the greeting and catch-up workflows depend on them. Future runs follow the template's default branch and propose updates through PRs.
 
-Project-specific CI, release, auto-merge, PR checks, editor settings, and lint/ignore configurations remain local. The previous workflow selection included an upstream file that no longer exists (`pre-commit-autoupdate.yml`), a linter with different triggers (`lint-github-actions.yml`), and branch deletion with different protection error handling (`delete-bot-branches-for-closed-prs.yml`); these are excluded from sync, while their local files remain in place.
+Project-specific CI, release, auto-merge, PR checks, editor settings, and lint/ignore configurations remain local. The previous workflow selection included an upstream file that no longer exists (`pre-commit-autoupdate.yml`), a linter with different triggers (`lint-github-actions.yml`), and branch deletion with different protection error handling (`delete-bot-branches-for-closed-prs.yml`). All three are excluded from sync. The last two keep their local files; `pre-commit-autoupdate.yml` was deleted here too, because pre-commit.ci opens the hook autoupdates.
 
 To expand the selection, edit `sources` in the corresponding workflow:
 
