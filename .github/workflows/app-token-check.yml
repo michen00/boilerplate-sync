@@ -30,6 +30,7 @@ jobs:
         with:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-metadata: read
       - name: Probe repo access with the minted token
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
