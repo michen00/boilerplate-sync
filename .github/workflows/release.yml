@@ -40,8 +40,7 @@ jobs:
         run: |
           if [ -z "$APP_CLIENT_ID" ] || [ "$APP_KEY_SET" != "true" ]; then
             echo "::error::Set vars.APP_CLIENT_ID and secrets.APP_PRIVATE_KEY first."
-            echo "::error::A release PR opened by GITHUB_TOKEN receives no"
-            echo "::error::check runs and can never satisfy main-protect."
+            echo "::error::The App token starts the release PR's checks automatically."
             exit 1
           fi
 
