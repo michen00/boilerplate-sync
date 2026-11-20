@@ -169,8 +169,8 @@ jobs:
       # README pins a release SHA in its Security example. That workflow runs
       # on a Monday cron, so without this nudge the example lags a release by
       # up to a week. Cosmetic, so never fail a published release over it.
-      # Unlike its other events, a `workflow_dispatch` from `GITHUB_TOKEN`
-      # starts a run, and the App lacks Actions write.
+      # A `workflow_dispatch` from `GITHUB_TOKEN` always starts a run, and the
+      # App lacks Actions write.
       - name: Refresh README version pins
         if: steps.due.outputs.due == 'true'
         continue-on-error: true
