@@ -375,15 +375,15 @@ This repository's two template-sync workflows reuse `vars.APP_CLIENT_ID` and `se
 
 Both workflows run only from the default branch. Non-workflow files sync weekly or on manual dispatch; workflow files sync on manual dispatch. Changes become signed App-authored pull requests, which can trigger normal PR checks. Runs with no changes skip PR creation. The public template is read using `GITHUB_TOKEN`, so the App token only needs access to this destination repository.
 
-The selection was compared against template commit [`4184670`](https://github.com/michen00/template/commit/418467037184ad493d396ee6ed80de32183ef1d0) on 2026-11-03, and `.github/release.yml` against [`6bf81ce`](https://github.com/michen00/template/commit/6bf81ce56433dd2ae6d9d4c1b71de961f40304ea) on 2026-11-19. These 14 files have equivalent configuration and behavior here:
+The selection was compared against template commit [`4184670`](https://github.com/michen00/template/commit/418467037184ad493d396ee6ed80de32183ef1d0) on 2026-11-03, and `.github/release.yml` against [`6bf81ce`](https://github.com/michen00/template/commit/6bf81ce56433dd2ae6d9d4c1b71de961f40304ea) on 2026-11-19. These 13 files have equivalent configuration and behavior here:
 
 | Stream | Selected files |
 | --- | --- |
 | Configs | `.editorconfig`, `.gitlint`, `.markdownlint.yml`, `.prettierrc`, `tombi.toml`, `.github/actionlint.yaml`, `.github/release.yml` |
 | Supporting automation | `.github/actions/detect-bot-author/action.yml`, `.github/scripts/approve-bot-gated-runs.sh` |
-| Workflows | `bot-automerge-disarm.yml`, `freeze-pr-links.yml`, `greet-new-contributors.yml`, `pr-body-unwrap.yml`, `pr-catchup.yml` |
+| Workflows | `bot-automerge-disarm.yml`, `freeze-pr-links.yml`, `pr-body-unwrap.yml`, `pr-catchup.yml` |
 
-The greeting transform preserves the `boilerplate-sync` community name. Other differences are comments or equivalent JSON/YAML formatting. The supporting action and script are included because the greeting and catch-up workflows depend on them. Future runs follow the template's default branch and propose updates through PRs.
+Other differences are comments or equivalent JSON/YAML formatting. The supporting action and script are included because `delete-bot-branches-for-closed-prs.yml` and the catch-up workflow depend on them. Future runs follow the template's default branch and propose updates through PRs.
 
 Project-specific CI, release, auto-merge, PR checks, editor settings, and lint/ignore configurations remain local. The previous workflow selection included an upstream file that no longer exists (`pre-commit-autoupdate.yml`), a linter with different triggers (`lint-github-actions.yml`), and branch deletion with different protection error handling (`delete-bot-branches-for-closed-prs.yml`). All three are excluded from sync. The last two keep their local files; `pre-commit-autoupdate.yml` was deleted here too, because pre-commit.ci opens the hook autoupdates.
 
