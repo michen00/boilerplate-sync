@@ -20,9 +20,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Every mutating call below passes the App token explicitly, so the ambient
-# token needs nothing beyond reading the checkout.
+# The ambient token starts the README workflow at the end. Every other
+# mutating call below passes the App token explicitly.
 permissions:
+  actions: write
   contents: read
 
 # Never cancel in progress: a run killed between the tag push and the release
@@ -168,9 +169,11 @@ jobs:
       # README pins a release SHA in its Security example. That workflow runs
       # on a Monday cron, so without this nudge the example lags a release by
       # up to a week. Cosmetic, so never fail a published release over it.
+      # Unlike its other events, a `workflow_dispatch` from `GITHUB_TOKEN`
+      # starts a run, and the App lacks Actions write.
       - name: Refresh README version pins
         if: steps.due.outputs.due == 'true'
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
         run: gh workflow run readme-action-versions.yml
