@@ -51,14 +51,10 @@ jobs:
               default_files:
                 - .github/workflows/bot-automerge-disarm.yml
                 - .github/workflows/freeze-pr-links.yml
-                - .github/workflows/greet-new-contributors.yml
                 - .github/workflows/pr-body-unwrap.yml
                 - .github/workflows/pr-catchup.yml
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fail-on-error: 'true'
-          hooks: |
-            transform:
-              .github/workflows/greet-new-contributors.yml: sed 's/`template`/`boilerplate-sync`/g'
       - name: Build PR body
         if: steps.sync.outputs.has-changes == 'true'
         id: pr-body

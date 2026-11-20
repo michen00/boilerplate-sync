@@ -11,7 +11,6 @@ rules:
     min-spaces-from-content: 1
   line-length:
     ignore: |
-      .github/workflows/greet-new-contributors.yml
       .github/workflows/sync-template-*.yml
     max: 100
     allow-non-breakable-words: true
